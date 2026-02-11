@@ -1,5 +1,9 @@
 use {
-    crate::{option::AskOption, style::SelectStyle},
+    crate::{
+        option::AskOption,
+        style::SelectStyle,
+        validation::{Validate, run_validator},
+    },
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
@@ -13,9 +17,9 @@ use {
 
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
-pub struct Select {
+pub struct Select<T: Clone> {
     prompt: String,
-    options: Vec<AskOption>,
+    options: Vec<AskOption<T>>,
     default_index: Option<usize>,
     page_size: usize,
     inline: bool,
@@ -26,10 +30,10 @@ pub struct Select {
     allow_escape: bool,
     vim_mode: bool,
     style: SelectStyle,
-    validation: Option<fn(usize, &AskOption) -> Result<(), String>>,
+    validation: Option<Box<dyn Validate<usize>>>,
 }
 
-impl Select {
+impl<T: Clone> Select<T> {
     pub fn new(prompt: impl Into<String>) -> Self {
         Self {
             prompt: prompt.into(),
@@ -52,16 +56,16 @@ impl Select {
         &self.prompt
     }
 
-    pub fn options(&self) -> &[AskOption] {
+    pub fn options(&self) -> &[AskOption<T>] {
         &self.options
     }
 
-    pub fn with_options(mut self, options: Vec<AskOption>) -> Self {
+    pub fn with_options(mut self, options: Vec<AskOption<T>>) -> Self {
         self.options = options;
         self
     }
 
-    pub fn with_option(mut self, option: AskOption) -> Self {
+    pub fn with_option(mut self, option: AskOption<T>) -> Self {
         self.options.push(option);
         self
     }
@@ -116,15 +120,26 @@ impl Select {
         self
     }
 
-    pub fn with_validation(
-        mut self,
-        validation: fn(usize, &AskOption) -> Result<(), String>,
-    ) -> Self {
-        self.validation = Some(validation);
+    /// Register a validator that receives the selected index.
+    ///
+    /// Accepts any `impl Validate<usize>`, including closures:
+    ///
+    /// ```rust,ignore
+    /// Select::new("Pick")
+    ///     .with_validation(|idx: &usize| {
+    ///         if *idx == 0 {
+    ///             Ok(Validation::Invalid("Pick something else".into()))
+    ///         } else {
+    ///             Ok(Validation::Valid)
+    ///         }
+    ///     })
+    /// ```
+    pub fn with_validation(mut self, validation: impl Validate<usize> + 'static) -> Self {
+        self.validation = Some(Box::new(validation));
         self
     }
 
-    pub fn ask(&self) -> miette::Result<usize> {
+    pub fn ask(&self) -> miette::Result<T> {
         if self.options.is_empty() {
             return Err(miette::miette!("No options provided"));
         }
@@ -143,7 +158,7 @@ impl Select {
         result
     }
 
-    fn ask_internal(&self) -> miette::Result<usize> {
+    fn ask_internal(&self) -> miette::Result<T> {
         let default_index = self.default_index.unwrap_or(0).min(self.options.len() - 1);
 
         let mut selected = default_index;
@@ -176,7 +191,7 @@ impl Select {
 
                         let selected_option = &self.options[selected];
                         self.show_result(&mut stdout(), selected_option)?;
-                        return Ok(selected);
+                        return Ok(selected_option.value.clone());
                     }
                     Ok(None) => {
                         if last_render_lines > 0 {
@@ -275,18 +290,15 @@ impl Select {
                 }
                 Ok(None)
             }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                let selected_option = &self.options[*selected];
-                self.validate_and_return(*selected, selected_option)
-            }
+            KeyCode::Enter | KeyCode::Char(' ') => self.validate_and_return(*selected),
             KeyCode::Esc if self.allow_escape => Err("Cancelled".into()),
             _ => Ok(None),
         }
     }
 
-    fn validate_and_return(&self, index: usize, option: &AskOption) -> Result<Option<()>, String> {
-        if let Some(validator) = self.validation {
-            validator(index, option)?;
+    fn validate_and_return(&self, index: usize) -> Result<Option<()>, String> {
+        if let Some(ref validator) = self.validation {
+            run_validator(validator.as_ref(), &index)?;
         }
         Ok(Some(()))
     }
@@ -433,7 +445,7 @@ impl Select {
         Ok(())
     }
 
-    fn show_result(&self, out: &mut std::io::Stdout, option: &AskOption) -> miette::Result<()> {
+    fn show_result(&self, out: &mut std::io::Stdout, option: &AskOption<T>) -> miette::Result<()> {
         writeln!(
             out,
             "{} {} {}",

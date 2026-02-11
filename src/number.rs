@@ -1,5 +1,8 @@
 use {
-    crate::style::NumberStyle,
+    crate::{
+        style::NumberStyle,
+        validation::{Validate, run_validator},
+    },
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
@@ -31,7 +34,9 @@ macro_rules! impl_numeric_type {
     };
 }
 
-impl_numeric_type!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, f32, f64, isize, usize);
+impl_numeric_type!(
+    i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, f32, f64, isize, usize
+);
 
 #[derive(Clone)]
 pub struct Number<T: NumericType> {
@@ -46,7 +51,7 @@ pub struct Number<T: NumericType> {
     show_hints: bool,
     show_bounds: bool,
     style: NumberStyle,
-    validation: Option<fn(T) -> Result<(), String>>,
+    validation: Option<Box<dyn Validate<T>>>,
 }
 
 impl<T: NumericType> Number<T>
@@ -126,8 +131,8 @@ impl<T: NumericType> Number<T> {
         self
     }
 
-    pub fn with_validation(mut self, validation: fn(T) -> Result<(), String>) -> Self {
-        self.validation = Some(validation);
+    pub fn with_validation(mut self, validation: impl Validate<T> + 'static) -> Self {
+        self.validation = Some(Box::new(validation));
         self
     }
 
@@ -147,10 +152,7 @@ impl<T: NumericType> Number<T> {
     }
 
     fn ask_internal(&self) -> miette::Result<T> {
-        let mut input = self
-            .default
-            .map(|d| d.to_string())
-            .unwrap_or_default();
+        let mut input = self.default.map(|d| d.to_string()).unwrap_or_default();
         let mut cursor_pos = input.len();
         let mut error_message: Option<String> = None;
 
@@ -160,8 +162,7 @@ impl<T: NumericType> Number<T> {
             event::read().into_diagnostic()?;
         }
 
-        let mut last_render_lines =
-            self.render(&mut stdout(), &input, error_message.as_deref())?;
+        let mut last_render_lines = self.render(&mut stdout(), &input, error_message.as_deref())?;
         stdout().flush().into_diagnostic()?;
 
         loop {
@@ -206,8 +207,7 @@ impl<T: NumericType> Number<T> {
                 }
                 execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
                 execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
-                last_render_lines =
-                    self.render(&mut stdout(), &input, error_message.as_deref())?;
+                last_render_lines = self.render(&mut stdout(), &input, error_message.as_deref())?;
                 stdout().flush().into_diagnostic()?;
             }
         }
@@ -318,8 +318,8 @@ impl<T: NumericType> Number<T> {
                 return Err(format!("Value must be at most {}", max));
             }
         }
-        if let Some(validator) = self.validation {
-            validator(value)?;
+        if let Some(ref validator) = self.validation {
+            run_validator(validator.as_ref(), &value)?;
         }
         Ok(Some(value))
     }

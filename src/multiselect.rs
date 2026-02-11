@@ -1,5 +1,9 @@
 use {
-    crate::{option::AskOption, style::MultiSelectStyle},
+    crate::{
+        option::AskOption,
+        style::MultiSelectStyle,
+        validation::{Validate, run_validator},
+    },
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
@@ -16,9 +20,9 @@ use {
 
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
-pub struct MultiSelect {
+pub struct MultiSelect<T: Clone> {
     prompt: String,
-    options: Vec<AskOption>,
+    options: Vec<AskOption<T>>,
     default_selections: HashSet<usize>,
     page_size: usize,
     prompt_prefix: String,
@@ -30,10 +34,10 @@ pub struct MultiSelect {
     min_selections: Option<usize>,
     max_selections: Option<usize>,
     style: MultiSelectStyle,
-    validation: Option<fn(&[usize]) -> Result<(), String>>,
+    validation: Option<Box<dyn Validate<[usize]>>>,
 }
 
-impl MultiSelect {
+impl<T: Clone> MultiSelect<T> {
     pub fn new(prompt: impl Into<String>) -> Self {
         Self {
             prompt: prompt.into(),
@@ -57,16 +61,16 @@ impl MultiSelect {
         &self.prompt
     }
 
-    pub fn options(&self) -> &[AskOption] {
+    pub fn options(&self) -> &[AskOption<T>] {
         &self.options
     }
 
-    pub fn with_options(mut self, options: Vec<AskOption>) -> Self {
+    pub fn with_options(mut self, options: Vec<AskOption<T>>) -> Self {
         self.options = options;
         self
     }
 
-    pub fn with_option(mut self, option: AskOption) -> Self {
+    pub fn with_option(mut self, option: AskOption<T>) -> Self {
         self.options.push(option);
         self
     }
@@ -131,8 +135,8 @@ impl MultiSelect {
         self
     }
 
-    pub fn with_validation(mut self, validation: fn(&[usize]) -> Result<(), String>) -> Self {
-        self.validation = Some(validation);
+    pub fn with_validation(mut self, validation: impl Validate<[usize]> + 'static) -> Self {
+        self.validation = Some(Box::new(validation));
         self
     }
 
@@ -372,8 +376,8 @@ impl MultiSelect {
             return Err(format!("Please select at most {} option(s)", max));
         }
 
-        if let Some(validator) = self.validation {
-            validator(selected)?;
+        if let Some(ref validator) = self.validation {
+            run_validator(validator.as_ref(), selected)?;
         }
 
         Ok(Some(()))

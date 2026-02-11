@@ -1,5 +1,8 @@
 use {
-    crate::style::PasswordStyle,
+    crate::{
+        style::PasswordStyle,
+        validation::{Validate, run_validator},
+    },
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
@@ -33,7 +36,7 @@ pub struct Password {
     show_hints: bool,
     confirmation: Option<String>,
     style: PasswordStyle,
-    validation: Option<fn(&str) -> Result<(), String>>,
+    validation: Option<Box<dyn Validate<str>>>,
 }
 
 impl Password {
@@ -116,8 +119,8 @@ impl Password {
         self
     }
 
-    pub fn with_validation(mut self, validation: fn(&str) -> Result<(), String>) -> Self {
-        self.validation = Some(validation);
+    pub fn with_validation(mut self, validation: impl Validate<str> + 'static) -> Self {
+        self.validation = Some(Box::new(validation));
         self
     }
 
@@ -165,8 +168,13 @@ impl Password {
             event::read().into_diagnostic()?;
         }
 
-        let mut last_render_lines =
-            self.render(&mut stdout(), prompt, &input, revealed, error_message.as_deref())?;
+        let mut last_render_lines = self.render(
+            &mut stdout(),
+            prompt,
+            &input,
+            revealed,
+            error_message.as_deref(),
+        )?;
         stdout().flush().into_diagnostic()?;
 
         loop {
@@ -258,8 +266,8 @@ impl Password {
                         return Err(format!("Must be at most {} characters", max));
                     }
                 }
-                if let Some(validator) = self.validation {
-                    validator(input)?;
+                if let Some(ref validator) = self.validation {
+                    run_validator(validator.as_ref(), input.as_str())?;
                 }
                 Ok(Some(input.clone()))
             }
@@ -432,7 +440,9 @@ impl Password {
             "{} {} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             prompt.style(self.style.prompt),
-            "●●●●●●●●".style(self.style.input_masked).bold(),
+            "●●●●●●●●"
+                .style(self.style.input_masked)
+                .bold(),
         )
         .into_diagnostic()?;
 

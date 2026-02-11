@@ -1,5 +1,8 @@
 use {
-    crate::style::TextInputStyle,
+    crate::{
+        style::TextInputStyle,
+        validation::{Validate, run_validator},
+    },
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
@@ -91,8 +94,6 @@ impl Autocomplete for SimpleAutocomplete {
     }
 }
 
-pub type Validator = fn(&str) -> Result<(), String>;
-
 #[derive(Clone)]
 pub struct TextInput {
     prompt: String,
@@ -106,7 +107,7 @@ pub struct TextInput {
     suggestion_page_size: usize,
     allow_escape: bool,
     style: TextInputStyle,
-    validation: Option<Validator>,
+    validation: Option<Box<dyn Validate<str>>>,
     autocomplete: Option<Box<dyn Autocomplete>>,
 }
 
@@ -179,8 +180,8 @@ impl TextInput {
         self
     }
 
-    pub fn with_validation(mut self, validation: fn(&str) -> Result<(), String>) -> Self {
-        self.validation = Some(validation);
+    pub fn with_validation(mut self, validation: impl Validate<str> + 'static) -> Self {
+        self.validation = Some(Box::new(validation));
         self
     }
 
@@ -392,9 +393,10 @@ impl TextInput {
     }
 
     pub fn validate_and_return(&self, value: &str) -> Result<Option<String>, String> {
-        if let Some(validator) = self.validation {
-            validator(value)?;
+        if let Some(ref validator) = self.validation {
+            run_validator(validator.as_ref(), value)?;
         }
+
         Ok(Some(value.to_string()))
     }
 

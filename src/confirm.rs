@@ -1,5 +1,8 @@
 use {
-    crate::style::ConfirmStyle,
+    crate::{
+        style::ConfirmStyle,
+        validation::{Validate, run_validator},
+    },
     crossterm::{
         ExecutableCommand, cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
@@ -31,7 +34,7 @@ pub struct Confirm {
     show_confirmation: bool,
     allow_escape: bool,
     style: ConfirmStyle,
-    validation: Option<fn(bool) -> Result<(), String>>,
+    validation: Option<Box<dyn Validate<bool>>>,
 }
 
 impl Confirm {
@@ -114,8 +117,8 @@ impl Confirm {
         self
     }
 
-    pub fn with_validation(mut self, validation: fn(bool) -> Result<(), String>) -> Self {
-        self.validation = Some(validation);
+    pub fn with_validation(mut self, validation: impl Validate<bool> + 'static) -> Self {
+        self.validation = Some(Box::new(validation));
         self
     }
 
@@ -304,8 +307,8 @@ impl Confirm {
     }
 
     fn validate_and_return(&self, value: bool) -> Result<Option<bool>, String> {
-        if let Some(validator) = self.validation {
-            validator(value)?;
+        if let Some(ref validator) = self.validation {
+            run_validator(validator.as_ref(), &value)?;
         }
         Ok(Some(value))
     }
@@ -409,7 +412,8 @@ impl Confirm {
             write!(
                 out,
                 "\n  {}",
-                "← → to select, Enter to confirm, Esc to cancel".style(self.style.hint)
+                "← → to select, Enter to confirm, Esc to cancel"
+                    .style(self.style.hint)
             )
             .into_diagnostic()?;
         }

@@ -1,5 +1,8 @@
 use {
-    crate::style::SortStyle,
+    crate::{
+        style::SortStyle,
+        validation::{Validate, run_validator},
+    },
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
@@ -26,11 +29,12 @@ pub struct Sort {
     page_size: usize,
     /// whether to show hints
     show_hints: bool,
+    /// whether to show indices
     show_indices: bool,
     allow_escape: bool,
     vim_mode: bool,
     style: SortStyle,
-    validation: Option<fn(&[String]) -> Result<(), String>>,
+    validation: Option<Box<dyn Validate<[String]>>>,
 }
 
 impl Sort {
@@ -104,8 +108,8 @@ impl Sort {
         self
     }
 
-    pub fn with_validation(mut self, validation: fn(&[String]) -> Result<(), String>) -> Self {
-        self.validation = Some(validation);
+    pub fn with_validation(mut self, validation: impl Validate<[String]> + 'static) -> Self {
+        self.validation = Some(Box::new(validation));
         self
     }
 
@@ -276,8 +280,8 @@ impl Sort {
                     return Ok(None);
                 }
 
-                if let Some(validator) = self.validation {
-                    validator(items)?;
+                if let Some(ref validator) = self.validation {
+                    run_validator(validator.as_ref(), items)?;
                 }
                 Ok(Some(()))
             }

@@ -1,5 +1,8 @@
 use {
-    crate::style::EditorStyle,
+    crate::{
+        style::EditorStyle,
+        validation::{Validate, run_validator},
+    },
     crossterm::{
         event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
         terminal,
@@ -25,7 +28,7 @@ pub struct Editor {
     show_hints: bool,
     allow_escape: bool,
     style: EditorStyle,
-    validation: Option<fn(&str) -> Result<(), String>>,
+    validation: Option<Box<dyn Validate<str>>>,
 }
 
 impl Editor {
@@ -94,8 +97,8 @@ impl Editor {
         self
     }
 
-    pub fn with_validation(mut self, validation: fn(&str) -> Result<(), String>) -> Self {
-        self.validation = Some(validation);
+    pub fn with_validation(mut self, validation: impl Validate<str> + 'static) -> Self {
+        self.validation = Some(Box::new(validation));
         self
     }
 
@@ -223,10 +226,7 @@ impl Editor {
 
         if !status.success() {
             let _ = std::fs::remove_file(&temp_path);
-            return Err(miette::miette!(
-                "Editor exited with status: {}",
-                status
-            ));
+            return Err(miette::miette!("Editor exited with status: {}", status));
         }
 
         let content = std::fs::read_to_string(&temp_path).into_diagnostic()?;
@@ -241,8 +241,8 @@ impl Editor {
             }
         }
 
-        if let Some(validator) = self.validation {
-            validator(&trimmed).map_err(|e| miette::miette!(e))?;
+        if let Some(ref validator) = self.validation {
+            run_validator(validator.as_ref(), &trimmed).map_err(|e| miette::miette!(e))?;
         }
 
         let line_count = trimmed.lines().count();
@@ -251,9 +251,13 @@ impl Editor {
             "{} {} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             self.prompt.style(self.style.prompt),
-            format!("({} line{})", line_count, if line_count == 1 { "" } else { "s" })
-                .style(self.style.success)
-                .bold(),
+            format!(
+                "({} line{})",
+                line_count,
+                if line_count == 1 { "" } else { "s" }
+            )
+            .style(self.style.success)
+            .bold(),
         )
         .into_diagnostic()?;
         out.flush().into_diagnostic()?;

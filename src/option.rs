@@ -2,28 +2,31 @@ use owo_colors::Style;
 
 /// an option in a (Multi)Select prompt
 #[derive(Clone, Debug)]
-pub struct AskOption {
+pub struct AskOption<T> {
     /// the name of the option
     pub name: String,
     /// the description of the option
     pub description: String,
+    /// the value returned when this option is selected
+    pub value: T,
     /// styling settings for displaying the option name
     pub name_style: Style,
     /// styling settings for displaying the option description
     pub description_style: Style,
 }
 
-impl AskOption {
+impl<T> AskOption<T> {
     /// make a new option
     ///
     /// # Arguments
     ///
     /// * `name` - the name of the option
     /// * `description` - the description of the option
-    pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
+    pub fn new(name: impl Into<String>, description: impl Into<String>, value: T) -> Self {
         Self {
             name: name.into(),
             name_style: crate::style::MultiSelectStyle::default().option_name,
+            value,
             description: description.into(),
             description_style: crate::style::MultiSelectStyle::default().option_description,
         }
@@ -34,10 +37,11 @@ impl AskOption {
     /// # Arguments
     ///
     /// * `name` - the name of the option
-    pub fn with_name(name: impl Into<String>) -> Self {
+    pub fn with_name(name: impl Into<String>, value: T) -> Self {
         Self {
             name: name.into(),
             name_style: crate::style::MultiSelectStyle::default().option_name,
+            value,
             description: String::new(),
             description_style: crate::style::MultiSelectStyle::default().option_description,
         }
