@@ -1,0 +1,17 @@
+[package]
+name = "bearask"
+version = "0.1.0"
+edition = "2024"
+description = "A really fast and featureful CLI prompting lib"
+license-file = "./LICENSE"
+readme = "README.md"
+keywords = ["cli", "prompt", "interactive"]
+categories = []
+homepage = "https://github.com/TheBearodactyl/bearask"
+repository = "https://github.com/TheBearodactyl/bearask"
+
+[dependencies]
+crossterm = "0.29.0"
+dyn-clone = "1.0.20"
+miette = { version = "7.6.0", features = ["fancy"] }
+owo-colors = "4.2.3"
