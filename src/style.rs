@@ -752,6 +752,242 @@ impl EditorStyle {
     }
 }
 
+#[derive(Clone)]
+pub struct FormStyle {
+    pub title: Style,
+    pub title_prefix_style: Style,
+    pub title_prefix: Option<String>,
+    pub section_title: Style,
+    pub section_decoration: Style,
+    pub prompt: Style,
+    pub active_prompt: Style,
+    pub active_marker: Style,
+    pub active_input: Style,
+    pub active_selected: Style,
+    pub placeholder: Style,
+    pub default_value: Style,
+    pub hint: Style,
+    pub option: Style,
+    pub checkbox_on: Style,
+    pub checkbox_off: Style,
+    pub password_mask: Style,
+    pub sort_grabbed: Style,
+    pub completed_prefix: Style,
+    pub completed_value: Style,
+    pub pending_prefix: Style,
+    pub pending_prompt: Style,
+    pub error: Style,
+    pub error_hint: Style,
+    pub nav_hint: Style,
+    pub progress: Style,
+    pub summary_text: Style,
+    pub summary_prefix_style: Style,
+    pub summary_prefix: Option<String>,
+}
+
+impl Default for FormStyle {
+    fn default() -> Self {
+        Self::mocha()
+    }
+}
+
+impl FormStyle {
+    pub fn mocha() -> Self {
+        Self {
+            title: Style::new().fg::<CustomColor<205, 214, 244>>().bold(),
+            title_prefix_style: Style::new().fg::<CustomColor<137, 180, 250>>(),
+            title_prefix: Some("◆".into()),
+            section_title: Style::new().fg::<CustomColor<186, 194, 222>>().bold(),
+            section_decoration: Style::new().fg::<CustomColor<127, 132, 156>>(),
+
+            prompt: Style::new().fg::<CustomColor<205, 214, 244>>(),
+            active_prompt: Style::new().fg::<CustomColor<205, 214, 244>>().bold(),
+            active_marker: Style::new().fg::<CustomColor<137, 180, 250>>().bold(),
+            active_input: Style::new().fg::<CustomColor<166, 227, 161>>(),
+            active_selected: Style::new().fg::<CustomColor<137, 180, 250>>().bold(),
+            placeholder: Style::new().fg::<CustomColor<127, 132, 156>>().italic(),
+            default_value: Style::new().fg::<CustomColor<186, 194, 222>>().italic(),
+            hint: Style::new().fg::<CustomColor<127, 132, 156>>(),
+            option: Style::new().fg::<CustomColor<186, 194, 222>>(),
+            checkbox_on: Style::new().fg::<CustomColor<166, 227, 161>>(),
+            checkbox_off: Style::new().fg::<CustomColor<127, 132, 156>>(),
+            password_mask: Style::new().fg::<CustomColor<186, 194, 222>>(),
+            sort_grabbed: Style::new().fg::<CustomColor<166, 227, 161>>().bold(),
+
+            completed_prefix: Style::new().fg::<CustomColor<166, 227, 161>>(),
+            completed_value: Style::new().fg::<CustomColor<166, 227, 161>>(),
+
+            pending_prefix: Style::new().fg::<CustomColor<127, 132, 156>>(),
+            pending_prompt: Style::new().fg::<CustomColor<127, 132, 156>>().dimmed(),
+
+            error: Style::new().fg::<CustomColor<243, 139, 168>>().bold(),
+            error_hint: Style::new().fg::<CustomColor<147, 153, 178>>(),
+            nav_hint: Style::new().fg::<CustomColor<127, 132, 156>>(),
+            progress: Style::new().fg::<CustomColor<186, 194, 222>>().dimmed(),
+
+            summary_text: Style::new().fg::<CustomColor<166, 227, 161>>().bold(),
+            summary_prefix_style: Style::new().fg::<CustomColor<166, 227, 161>>(),
+            summary_prefix: Some("◆".into()),
+        }
+    }
+
+    pub fn frappe() -> Self {
+        Self {
+            title: Style::new().fg::<CustomColor<198, 208, 245>>().bold(),
+            title_prefix_style: Style::new().fg::<CustomColor<140, 170, 238>>(),
+            title_prefix: Some("◆".into()),
+            section_title: Style::new().fg::<CustomColor<181, 191, 226>>().bold(),
+            section_decoration: Style::new().fg::<CustomColor<131, 139, 167>>(),
+
+            prompt: Style::new().fg::<CustomColor<198, 208, 245>>(),
+            active_prompt: Style::new().fg::<CustomColor<198, 208, 245>>().bold(),
+            active_marker: Style::new().fg::<CustomColor<140, 170, 238>>().bold(),
+            active_input: Style::new().fg::<CustomColor<166, 209, 137>>(),
+            active_selected: Style::new().fg::<CustomColor<140, 170, 238>>().bold(),
+            placeholder: Style::new().fg::<CustomColor<131, 139, 167>>().italic(),
+            default_value: Style::new().fg::<CustomColor<181, 191, 226>>().italic(),
+            hint: Style::new().fg::<CustomColor<131, 139, 167>>(),
+            option: Style::new().fg::<CustomColor<181, 191, 226>>(),
+            checkbox_on: Style::new().fg::<CustomColor<166, 209, 137>>(),
+            checkbox_off: Style::new().fg::<CustomColor<131, 139, 167>>(),
+            password_mask: Style::new().fg::<CustomColor<181, 191, 226>>(),
+            sort_grabbed: Style::new().fg::<CustomColor<166, 209, 137>>().bold(),
+
+            completed_prefix: Style::new().fg::<CustomColor<166, 209, 137>>(),
+            completed_value: Style::new().fg::<CustomColor<166, 209, 137>>(),
+
+            pending_prefix: Style::new().fg::<CustomColor<131, 139, 167>>(),
+            pending_prompt: Style::new().fg::<CustomColor<131, 139, 167>>().dimmed(),
+
+            error: Style::new().fg::<CustomColor<231, 130, 132>>().bold(),
+            error_hint: Style::new().fg::<CustomColor<165, 173, 206>>(),
+            nav_hint: Style::new().fg::<CustomColor<131, 139, 167>>(),
+            progress: Style::new().fg::<CustomColor<181, 191, 226>>().dimmed(),
+
+            summary_text: Style::new().fg::<CustomColor<166, 209, 137>>().bold(),
+            summary_prefix_style: Style::new().fg::<CustomColor<166, 209, 137>>(),
+            summary_prefix: Some("◆".into()),
+        }
+    }
+
+    pub fn macchiato() -> Self {
+        Self {
+            title: Style::new().fg::<CustomColor<202, 211, 245>>().bold(),
+            title_prefix_style: Style::new().fg::<CustomColor<138, 173, 244>>(),
+            title_prefix: Some("◆".into()),
+            section_title: Style::new().fg::<CustomColor<184, 192, 224>>().bold(),
+            section_decoration: Style::new().fg::<CustomColor<128, 135, 162>>(),
+
+            prompt: Style::new().fg::<CustomColor<202, 211, 245>>(),
+            active_prompt: Style::new().fg::<CustomColor<202, 211, 245>>().bold(),
+            active_marker: Style::new().fg::<CustomColor<138, 173, 244>>().bold(),
+            active_input: Style::new().fg::<CustomColor<166, 218, 149>>(),
+            active_selected: Style::new().fg::<CustomColor<138, 173, 244>>().bold(),
+            placeholder: Style::new().fg::<CustomColor<128, 135, 162>>().italic(),
+            default_value: Style::new().fg::<CustomColor<184, 192, 224>>().italic(),
+            hint: Style::new().fg::<CustomColor<128, 135, 162>>(),
+            option: Style::new().fg::<CustomColor<184, 192, 224>>(),
+            checkbox_on: Style::new().fg::<CustomColor<166, 218, 149>>(),
+            checkbox_off: Style::new().fg::<CustomColor<128, 135, 162>>(),
+            password_mask: Style::new().fg::<CustomColor<184, 192, 224>>(),
+            sort_grabbed: Style::new().fg::<CustomColor<166, 218, 149>>().bold(),
+
+            completed_prefix: Style::new().fg::<CustomColor<166, 218, 149>>(),
+            completed_value: Style::new().fg::<CustomColor<166, 218, 149>>(),
+
+            pending_prefix: Style::new().fg::<CustomColor<128, 135, 162>>(),
+            pending_prompt: Style::new().fg::<CustomColor<128, 135, 162>>().dimmed(),
+
+            error: Style::new().fg::<CustomColor<237, 135, 150>>().bold(),
+            error_hint: Style::new().fg::<CustomColor<153, 160, 187>>(),
+            nav_hint: Style::new().fg::<CustomColor<128, 135, 162>>(),
+            progress: Style::new().fg::<CustomColor<184, 192, 224>>().dimmed(),
+
+            summary_text: Style::new().fg::<CustomColor<166, 218, 149>>().bold(),
+            summary_prefix_style: Style::new().fg::<CustomColor<166, 218, 149>>(),
+            summary_prefix: Some("◆".into()),
+        }
+    }
+
+    pub fn latte() -> Self {
+        Self {
+            title: Style::new().fg::<CustomColor<76, 79, 105>>().bold(),
+            title_prefix_style: Style::new().fg::<CustomColor<30, 102, 245>>(),
+            title_prefix: Some("◆".into()),
+            section_title: Style::new().fg::<CustomColor<92, 95, 119>>().bold(),
+            section_decoration: Style::new().fg::<CustomColor<156, 160, 176>>(),
+
+            prompt: Style::new().fg::<CustomColor<76, 79, 105>>(),
+            active_prompt: Style::new().fg::<CustomColor<76, 79, 105>>().bold(),
+            active_marker: Style::new().fg::<CustomColor<30, 102, 245>>().bold(),
+            active_input: Style::new().fg::<CustomColor<64, 160, 43>>(),
+            active_selected: Style::new().fg::<CustomColor<30, 102, 245>>().bold(),
+            placeholder: Style::new().fg::<CustomColor<156, 160, 176>>().italic(),
+            default_value: Style::new().fg::<CustomColor<92, 95, 119>>().italic(),
+            hint: Style::new().fg::<CustomColor<156, 160, 176>>(),
+            option: Style::new().fg::<CustomColor<92, 95, 119>>(),
+            checkbox_on: Style::new().fg::<CustomColor<64, 160, 43>>(),
+            checkbox_off: Style::new().fg::<CustomColor<156, 160, 176>>(),
+            password_mask: Style::new().fg::<CustomColor<92, 95, 119>>(),
+            sort_grabbed: Style::new().fg::<CustomColor<64, 160, 43>>().bold(),
+
+            completed_prefix: Style::new().fg::<CustomColor<64, 160, 43>>(),
+            completed_value: Style::new().fg::<CustomColor<64, 160, 43>>(),
+
+            pending_prefix: Style::new().fg::<CustomColor<156, 160, 176>>(),
+            pending_prompt: Style::new().fg::<CustomColor<156, 160, 176>>().dimmed(),
+
+            error: Style::new().fg::<CustomColor<210, 15, 57>>().bold(),
+            error_hint: Style::new().fg::<CustomColor<124, 127, 147>>(),
+            nav_hint: Style::new().fg::<CustomColor<156, 160, 176>>(),
+            progress: Style::new().fg::<CustomColor<92, 95, 119>>().dimmed(),
+
+            summary_text: Style::new().fg::<CustomColor<64, 160, 43>>().bold(),
+            summary_prefix_style: Style::new().fg::<CustomColor<64, 160, 43>>(),
+            summary_prefix: Some("◆".into()),
+        }
+    }
+
+    pub fn minimal() -> Self {
+        Self {
+            title: Style::new().bold(),
+            title_prefix_style: Style::new().bold(),
+            title_prefix: Some("---".into()),
+            section_title: Style::new().bold(),
+            section_decoration: Style::new().dimmed(),
+
+            prompt: Style::new(),
+            active_prompt: Style::new().bold(),
+            active_marker: Style::new().bold(),
+            active_input: Style::new(),
+            active_selected: Style::new().bold(),
+            placeholder: Style::new().dimmed().italic(),
+            default_value: Style::new().dimmed(),
+            hint: Style::new().dimmed(),
+            option: Style::new(),
+            checkbox_on: Style::new(),
+            checkbox_off: Style::new().dimmed(),
+            password_mask: Style::new().dimmed(),
+            sort_grabbed: Style::new().bold(),
+
+            completed_prefix: Style::new(),
+            completed_value: Style::new(),
+
+            pending_prefix: Style::new().dimmed(),
+            pending_prompt: Style::new().dimmed(),
+
+            error: Style::new().bold(),
+            error_hint: Style::new().dimmed(),
+            nav_hint: Style::new().dimmed(),
+            progress: Style::new().dimmed(),
+
+            summary_text: Style::new().bold(),
+            summary_prefix_style: Style::new().bold(),
+            summary_prefix: Some("---".into()),
+        }
+    }
+}
+
 pub fn color<const R: u8, const G: u8, const B: u8>() -> Style {
     Style::new().fg::<CustomColor<R, G, B>>()
 }

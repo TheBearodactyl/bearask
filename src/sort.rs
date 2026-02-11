@@ -11,13 +11,20 @@ use {
     std::io::{Write, stdout},
 };
 
+/// a rearrangable list of items
 #[derive(Clone)]
 pub struct Sort {
+    /// the prompt to display on the CLI
     prompt: String,
+    /// the choices to be provided
     items: Vec<String>,
+    /// the character to show before the prompt message
     prompt_prefix: String,
+    /// an optional help message
     help_message: Option<String>,
+    /// the number of options to show on each page
     page_size: usize,
+    /// whether to show hints
     show_hints: bool,
     show_indices: bool,
     allow_escape: bool,
