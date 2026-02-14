@@ -140,7 +140,7 @@ impl<T: Clone> MultiSelect<T> {
         self
     }
 
-    pub fn ask(&self) -> miette::Result<Vec<usize>> {
+    pub fn ask(&self) -> miette::Result<Vec<AskOption<T>>> {
         if self.options.is_empty() {
             return Err(miette::miette!("No options provided"));
         }
@@ -159,7 +159,7 @@ impl<T: Clone> MultiSelect<T> {
         result
     }
 
-    fn ask_internal(&self) -> miette::Result<Vec<usize>> {
+    fn ask_internal(&self) -> miette::Result<Vec<AskOption<T>>> {
         let mut selected_indices: HashSet<usize> = self
             .default_selections
             .iter()
@@ -201,10 +201,15 @@ impl<T: Clone> MultiSelect<T> {
                         execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
                         execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
 
-                        let mut result: Vec<usize> = selected_indices.into_iter().collect();
-                        result.sort_unstable();
-                        self.show_result(&mut stdout(), &result)?;
-                        return Ok(result);
+                        let mut indices: Vec<usize> = selected_indices.into_iter().collect();
+                        indices.sort_unstable();
+                        self.show_result(&mut stdout(), &indices)?;
+
+                        let selected_options = indices
+                            .iter()
+                            .filter_map(|&i| self.options.get(i).cloned())
+                            .collect();
+                        return Ok(selected_options);
                     }
                     Ok(None) => {
                         if last_render_lines > 0 {
@@ -231,8 +236,6 @@ impl<T: Clone> MultiSelect<T> {
                     }
                 }
             }
-
-            stdout().flush().into_diagnostic()?;
         }
     }
 
@@ -312,7 +315,7 @@ impl<T: Clone> MultiSelect<T> {
                     if let Some(max) = self.max_selections
                         && selected_indices.len() >= max
                     {
-                        return Ok(None);
+                        return Err(format!("Cannot select more than {} options", max));
                     }
                     selected_indices.insert(*cursor);
                 }
@@ -390,10 +393,10 @@ impl<T: Clone> MultiSelect<T> {
         scroll_offset: usize,
         selected_indices: &HashSet<usize>,
     ) -> miette::Result<usize> {
+        let tw = crate::util::term_width();
         let mut line_count = 0;
 
-        writeln!(
-            out,
+        let line = format!(
             "{} {} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             self.prompt.style(self.style.prompt),
@@ -403,13 +406,12 @@ impl<T: Clone> MultiSelect<T> {
                 self.max_selections.unwrap_or(usize::MAX)
             )
             .style(self.style.hint)
-        )
-        .into_diagnostic()?;
-        line_count += 1;
+        );
+        line_count += crate::util::writeln_physical(out, &line, tw)?;
 
         if let Some(ref help) = self.help_message {
-            writeln!(out, "  {}", help.style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", help.style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         let end_offset = (scroll_offset + self.page_size).min(self.options.len());
@@ -419,13 +421,11 @@ impl<T: Clone> MultiSelect<T> {
             let absolute_index = scroll_offset + i;
             let is_cursor = absolute_index == cursor;
             let is_selected = selected_indices.contains(&absolute_index);
-
             let cursor_marker = if is_cursor { "󰁕" } else { " " };
             let checkbox = if is_selected { "󰄲" } else { "󰄮" };
 
             if self.show_descriptions && !option.description.is_empty() {
-                writeln!(
-                    out,
+                let line = format!(
                     "  {} {} {}",
                     cursor_marker.style(self.style.cursor),
                     checkbox.style(if is_selected {
@@ -434,17 +434,16 @@ impl<T: Clone> MultiSelect<T> {
                         self.style.checkbox_unselected
                     }),
                     option.name.style(option.name_style)
-                )
-                .into_diagnostic()?;
-                line_count += 1;
+                );
 
-                writeln!(
-                    out,
+                line_count += crate::util::writeln_physical(out, &line, tw)?;
+
+                let line = format!(
                     "        {}",
-                    option.description.style(option.description_style)
-                )
-                .into_diagnostic()?;
-                line_count += 1;
+                    option.description.style(option.description_style),
+                );
+
+                line_count += crate::util::writeln_physical(out, &line, tw)?;
             } else {
                 let style = if is_cursor {
                     self.style.cursor
@@ -454,8 +453,7 @@ impl<T: Clone> MultiSelect<T> {
                     self.style.option_name
                 };
 
-                writeln!(
-                    out,
+                let line = format!(
                     "  {} {} {}",
                     cursor_marker.style(self.style.cursor),
                     checkbox.style(if is_selected {
@@ -464,31 +462,27 @@ impl<T: Clone> MultiSelect<T> {
                         self.style.checkbox_unselected
                     }),
                     option.name.style(style)
-                )
-                .into_diagnostic()?;
-                line_count += 1;
+                );
+
+                line_count += crate::util::writeln_physical(out, &line, tw)?;
             }
         }
 
         if scroll_offset > 0 {
-            writeln!(
-                out,
+            let line = format!(
                 "  {}",
                 format!("(↑ {} more above)", scroll_offset).style(self.style.hint)
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if end_offset < self.options.len() {
-            writeln!(
-                out,
+            let line = format!(
                 "  {}",
                 format!("(↓ {} more below)", self.options.len() - end_offset)
                     .style(self.style.hint)
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if self.show_hints {
@@ -517,25 +511,25 @@ impl<T: Clone> MultiSelect<T> {
                 hints.push("Esc to cancel");
             }
 
-            writeln!(out, "  {}", hints.join(", ").style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", hints.join(", ").style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         let count_text = format!("[{} selected]", selected_indices.len());
-        writeln!(out, "  {}", count_text.style(self.style.selection_count)).into_diagnostic()?;
-        line_count += 1;
+        let line = format!("  {}", count_text.style(self.style.selection_count));
+        line_count += crate::util::writeln_physical(out, &line, tw)?;
 
         Ok(line_count)
     }
 
     fn show_error(&self, out: &mut std::io::Stdout, error: &str) -> miette::Result<()> {
-        writeln!(
-            out,
+        let line = format!(
             "{} {}",
             "✗".style(self.style.error),
             error.style(self.style.error_hint),
-        )
-        .into_diagnostic()?;
+        );
+        let tw = crate::util::term_width();
+        crate::util::writeln_physical(out, &line, tw)?;
 
         Ok(())
     }
@@ -552,14 +546,14 @@ impl<T: Clone> MultiSelect<T> {
             selected_names.join(", ")
         };
 
-        writeln!(
-            out,
+        let line = format!(
             "{} {} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             self.prompt.style(self.style.prompt),
             result_text.style(self.style.selected).bold(),
-        )
-        .into_diagnostic()?;
+        );
+        let tw = crate::util::term_width();
+        crate::util::writeln_physical(out, &line, tw)?;
 
         out.flush().into_diagnostic()?;
         Ok(())

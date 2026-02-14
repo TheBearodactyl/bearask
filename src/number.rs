@@ -243,10 +243,10 @@ impl<T: NumericType> Number<T> {
             KeyCode::Up => {
                 if let Ok(current) = input.parse::<T>() {
                     let new_val = current.increment(self.step);
-                    if let Some(max) = self.max {
-                        if new_val > max {
-                            return Ok(None);
-                        }
+                    if let Some(max) = self.max
+                        && new_val > max
+                    {
+                        return Ok(None);
                     }
                     *input = new_val.to_string();
                     *cursor_pos = input.len();
@@ -259,10 +259,10 @@ impl<T: NumericType> Number<T> {
             KeyCode::Down => {
                 if let Ok(current) = input.parse::<T>() {
                     let new_val = current.decrement(self.step);
-                    if let Some(min) = self.min {
-                        if new_val < min {
-                            return Ok(None);
-                        }
+                    if let Some(min) = self.min
+                        && new_val < min
+                    {
+                        return Ok(None);
                     }
                     *input = new_val.to_string();
                     *cursor_pos = input.len();
@@ -308,15 +308,15 @@ impl<T: NumericType> Number<T> {
     }
 
     fn validate_value(&self, value: T) -> Result<Option<T>, String> {
-        if let Some(min) = self.min {
-            if value < min {
-                return Err(format!("Value must be at least {}", min));
-            }
+        if let Some(min) = self.min
+            && value < min
+        {
+            return Err(format!("Value must be at least {}", min));
         }
-        if let Some(max) = self.max {
-            if value > max {
-                return Err(format!("Value must be at most {}", max));
-            }
+        if let Some(max) = self.max
+            && value > max
+        {
+            return Err(format!("Value must be at most {}", max));
         }
         if let Some(ref validator) = self.validation {
             run_validator(validator.as_ref(), &value)?;
@@ -330,15 +330,14 @@ impl<T: NumericType> Number<T> {
         input: &str,
         error: Option<&str>,
     ) -> miette::Result<usize> {
+        let tw = crate::util::term_width();
         let mut line_count = 0;
 
-        write!(
-            out,
+        let mut prompt_line = format!(
             "{} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             self.prompt.style(self.style.prompt),
-        )
-        .into_diagnostic()?;
+        );
 
         if self.show_bounds && (self.min.is_some() || self.max.is_some()) {
             let min_str = self
@@ -349,20 +348,18 @@ impl<T: NumericType> Number<T> {
                 .max
                 .map(|m| m.to_string())
                 .unwrap_or_else(|| "∞".to_string());
-            write!(
-                out,
-                " {}",
+            prompt_line = format!(
+                "{} {}",
+                prompt_line,
                 format!("[{}..{}]", min_str, max_str).style(self.style.bounds)
-            )
-            .into_diagnostic()?;
+            );
         }
 
-        writeln!(out).into_diagnostic()?;
-        line_count += 1;
+        line_count += crate::util::writeln_physical(out, &prompt_line, tw)?;
 
         if let Some(ref help) = self.help_message {
-            writeln!(out, "  {}", help.style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", help.style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         let display_text = if input.is_empty() {
@@ -377,18 +374,16 @@ impl<T: NumericType> Number<T> {
             input.style(self.style.input).to_string()
         };
 
-        writeln!(out, "  {}", display_text).into_diagnostic()?;
-        line_count += 1;
+        let line = format!("  {}", display_text);
+        line_count += crate::util::writeln_physical(out, &line, tw)?;
 
         if let Some(err) = error {
-            writeln!(
-                out,
+            let line = format!(
                 "  {} {}",
                 "✗".style(self.style.error),
                 err.style(self.style.error_hint)
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if self.show_hints {
@@ -398,22 +393,22 @@ impl<T: NumericType> Number<T> {
                 hints.push("Esc to cancel");
             }
 
-            writeln!(out, "  {}", hints.join(", ").style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", hints.join(", ").style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         Ok(line_count)
     }
 
     fn show_result(&self, out: &mut std::io::Stdout, value: T) -> miette::Result<()> {
-        writeln!(
-            out,
+        let tw = crate::util::term_width();
+        let line = format!(
             "{} {} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             self.prompt.style(self.style.prompt),
             value.to_string().style(self.style.input).bold(),
-        )
-        .into_diagnostic()?;
+        );
+        crate::util::writeln_physical(out, &line, tw)?;
 
         out.flush().into_diagnostic()?;
         Ok(())

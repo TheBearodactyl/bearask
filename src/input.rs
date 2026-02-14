@@ -279,13 +279,10 @@ impl TextInput {
                     }
                 }
             }
-
-            stdout().flush().into_diagnostic()?;
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn handle_key(
+    fn handle_key(
         &mut self,
         key_event: KeyEvent,
         input: &mut String,
@@ -407,30 +404,28 @@ impl TextInput {
         suggestions: &[String],
         selected_suggestion: Option<usize>,
     ) -> miette::Result<usize> {
+        let tw = crate::util::term_width();
         let mut line_count = 0;
 
         if self.inline {
-            write!(
-                out,
+            let line = format!(
                 "{} {} ",
                 self.prompt_prefix.style(self.style.prompt_prefix),
                 self.prompt.style(self.style.prompt),
-            )
-            .into_diagnostic()?;
+            );
+            write!(out, "{}", line).into_diagnostic()?;
         } else {
-            writeln!(
-                out,
+            let line = format!(
                 "{} {}",
                 self.prompt_prefix.style(self.style.prompt_prefix),
                 self.prompt.style(self.style.prompt),
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if let Some(ref help) = self.help_message {
-            writeln!(out, "  {}", help.style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", help.style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         let display_text = if input.is_empty() {
@@ -443,21 +438,19 @@ impl TextInput {
             input.style(self.style.input).to_string()
         };
 
-        write!(out, "  {} ", display_text).into_diagnostic()?;
+        let mut input_line = format!("  {} ", display_text);
 
         if input.is_empty()
             && let Some(default) = self.default.clone()
         {
-            write!(
-                out,
-                "(default: {}) ",
+            input_line = format!(
+                "{}(default: {}) ",
+                input_line,
                 &default.style(self.style.default_value)
-            )
-            .into_diagnostic()?;
+            );
         }
 
-        writeln!(out).into_diagnostic()?;
-        line_count += 1;
+        line_count += crate::util::writeln_physical(out, &input_line, tw)?;
 
         if self.show_suggestions && !suggestions.is_empty() {
             let visible_suggestions: Vec<_> = suggestions
@@ -467,8 +460,8 @@ impl TextInput {
                 .collect();
 
             if !visible_suggestions.is_empty() {
-                writeln!(out, "  {}", "Suggestions:".style(self.style.hint)).into_diagnostic()?;
-                line_count += 1;
+                let line = format!("  {}", "Suggestions:".style(self.style.hint));
+                line_count += crate::util::writeln_physical(out, &line, tw)?;
 
                 for (idx, suggestion) in visible_suggestions {
                     let marker = if Some(idx) == selected_suggestion {
@@ -483,28 +476,24 @@ impl TextInput {
                         self.style.suggestion
                     };
 
-                    writeln!(
-                        out,
+                    let line = format!(
                         "    {} {}",
                         marker.style(self.style.selected),
                         suggestion.style(style)
-                    )
-                    .into_diagnostic()?;
-                    line_count += 1;
+                    );
+                    line_count += crate::util::writeln_physical(out, &line, tw)?;
                 }
 
                 if suggestions.len() > self.suggestion_page_size {
-                    writeln!(
-                        out,
+                    let line = format!(
                         "    {}",
                         format!(
                             "({} more...)",
                             suggestions.len() - self.suggestion_page_size
                         )
                         .style(self.style.hint)
-                    )
-                    .into_diagnostic()?;
-                    line_count += 1;
+                    );
+                    line_count += crate::util::writeln_physical(out, &line, tw)?;
                 }
             }
         }
@@ -522,34 +511,34 @@ impl TextInput {
         }
 
         if !hints.is_empty() {
-            writeln!(out, "  {}", hints.join(", ").style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", hints.join(", ").style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         Ok(line_count)
     }
 
     pub fn show_error(&self, out: &mut std::io::Stdout, error: &str) -> miette::Result<()> {
-        writeln!(
-            out,
+        let tw = crate::util::term_width();
+        let line = format!(
             "{} {}",
             "✗".style(self.style.error),
             error.style(self.style.error_hint),
-        )
-        .into_diagnostic()?;
+        );
+        crate::util::writeln_physical(out, &line, tw)?;
 
         Ok(())
     }
 
     pub fn show_result(&self, out: &mut std::io::Stdout, answer: &str) -> miette::Result<()> {
-        writeln!(
-            out,
+        let tw = crate::util::term_width();
+        let line = format!(
             "{} {} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             self.prompt.style(self.style.prompt),
             answer.style(self.style.input).bold(),
-        )
-        .into_diagnostic()?;
+        );
+        crate::util::writeln_physical(out, &line, tw)?;
 
         out.flush().into_diagnostic()?;
         Ok(())

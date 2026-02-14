@@ -11,6 +11,8 @@ pub mod sort;
 pub mod style;
 pub mod validation;
 
+pub(crate) mod util;
+
 pub use {
     confirm::Confirm,
     editor::Editor,

@@ -309,6 +309,7 @@ impl<T: Clone> Select<T> {
         selected: usize,
         scroll_offset: usize,
     ) -> miette::Result<usize> {
+        let tw = crate::util::term_width();
         let mut line_count = 0;
 
         if self.inline {
@@ -320,19 +321,17 @@ impl<T: Clone> Select<T> {
             )
             .into_diagnostic()?;
         } else {
-            writeln!(
-                out,
+            let line = format!(
                 "{} {}",
                 self.prompt_prefix.style(self.style.prompt_prefix),
                 self.prompt.style(self.style.prompt),
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if let Some(ref help) = self.help_message {
-            writeln!(out, "  {}", help.style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", help.style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         let end_offset = (scroll_offset + self.page_size).min(self.options.len());
@@ -356,18 +355,15 @@ impl<T: Clone> Select<T> {
                     self.style.option_description
                 };
 
-                writeln!(
-                    out,
+                let line = format!(
                     "  {} {}",
                     marker.style(self.style.selected),
                     option.name.style(name_style)
-                )
-                .into_diagnostic()?;
-                line_count += 1;
+                );
+                line_count += crate::util::writeln_physical(out, &line, tw)?;
 
-                writeln!(out, "      {}", option.description.style(desc_style))
-                    .into_diagnostic()?;
-                line_count += 1;
+                let line = format!("      {}", option.description.style(desc_style));
+                line_count += crate::util::writeln_physical(out, &line, tw)?;
             } else {
                 let style = if is_selected {
                     self.style.selected
@@ -375,36 +371,30 @@ impl<T: Clone> Select<T> {
                     self.style.option_name
                 };
 
-                writeln!(
-                    out,
+                let line = format!(
                     "  {} {}",
                     marker.style(self.style.selected),
                     option.name.style(style)
-                )
-                .into_diagnostic()?;
-                line_count += 1;
+                );
+                line_count += crate::util::writeln_physical(out, &line, tw)?;
             }
         }
 
         if scroll_offset > 0 {
-            writeln!(
-                out,
+            let line = format!(
                 "  {}",
                 format!("(↑ {} more above)", scroll_offset).style(self.style.hint)
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if end_offset < self.options.len() {
-            writeln!(
-                out,
+            let line = format!(
                 "  {}",
                 format!("(↓ {} more below)", self.options.len() - end_offset)
                     .style(self.style.hint)
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if self.show_hints {
@@ -426,8 +416,8 @@ impl<T: Clone> Select<T> {
                 hints.push("Esc to cancel");
             }
 
-            writeln!(out, "  {}", hints.join(", ").style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", hints.join(", ").style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         Ok(line_count)

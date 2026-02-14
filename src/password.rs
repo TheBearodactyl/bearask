@@ -256,15 +256,16 @@ impl Password {
 
         match key_event.code {
             KeyCode::Enter => {
-                if let Some(min) = self.min_length {
-                    if input.len() < min {
-                        return Err(format!("Must be at least {} characters", min));
-                    }
+                if let Some(min) = self.min_length
+                    && input.len() < min
+                {
+                    return Err(format!("Must be at least {} characters", min));
                 }
-                if let Some(max) = self.max_length {
-                    if input.len() > max {
-                        return Err(format!("Must be at most {} characters", max));
-                    }
+
+                if let Some(max) = self.max_length
+                    && input.len() > max
+                {
+                    return Err(format!("Must be at most {} characters", max));
                 }
                 if let Some(ref validator) = self.validation {
                     run_validator(validator.as_ref(), input.as_str())?;
@@ -345,20 +346,19 @@ impl Password {
         revealed: bool,
         error: Option<&str>,
     ) -> miette::Result<usize> {
+        let tw = crate::util::term_width();
         let mut line_count = 0;
 
-        writeln!(
-            out,
+        let line = format!(
             "{} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             prompt.style(self.style.prompt),
-        )
-        .into_diagnostic()?;
-        line_count += 1;
+        );
+        line_count += crate::util::writeln_physical(out, &line, tw)?;
 
         if let Some(ref help) = self.help_message {
-            writeln!(out, "  {}", help.style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", help.style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         let display_text = if input.is_empty() {
@@ -380,8 +380,8 @@ impl Password {
             self.style.input_masked
         };
 
-        writeln!(out, "  {}", display_text.style(input_style)).into_diagnostic()?;
-        line_count += 1;
+        let line = format!("  {}", display_text.style(input_style));
+        line_count += crate::util::writeln_physical(out, &line, tw)?;
 
         if self.show_strength && !input.is_empty() {
             let (label, level) = Self::password_strength(input);
@@ -396,25 +396,21 @@ impl Password {
                 _ => self.style.strength_strong,
             };
 
-            writeln!(
-                out,
+            let line = format!(
                 "  {} {}",
                 bar.style(strength_style),
                 label.style(strength_style)
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if let Some(err) = error {
-            writeln!(
-                out,
+            let line = format!(
                 "  {} {}",
                 "✗".style(self.style.error),
                 err.style(self.style.error_hint)
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if self.show_hints {
@@ -427,24 +423,22 @@ impl Password {
                 hints.push("Esc to cancel");
             }
 
-            writeln!(out, "  {}", hints.join(", ").style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", hints.join(", ").style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         Ok(line_count)
     }
 
     fn show_result(&self, out: &mut std::io::Stdout, prompt: &str) -> miette::Result<()> {
-        writeln!(
-            out,
+        let tw = crate::util::term_width();
+        let line = format!(
             "{} {} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             prompt.style(self.style.prompt),
-            "●●●●●●●●"
-                .style(self.style.input_masked)
-                .bold(),
-        )
-        .into_diagnostic()?;
+            "●●●●●●●●".style(self.style.input_masked).bold(),
+        );
+        crate::util::writeln_physical(out, &line, tw)?;
 
         out.flush().into_diagnostic()?;
         Ok(())

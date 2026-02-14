@@ -139,33 +139,34 @@ impl Editor {
     fn ask_internal(&self) -> miette::Result<String> {
         let mut out = stdout();
         let editor = self.detect_editor();
+        let tw = crate::util::term_width();
 
-        writeln!(
-            out,
+        let line = format!(
             "{} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             self.prompt.style(self.style.prompt),
-        )
-        .into_diagnostic()?;
+        );
+        crate::util::writeln_physical(&mut out, &line, tw)?;
 
         if let Some(ref help) = self.help_message {
-            writeln!(out, "  {}", help.style(self.style.hint)).into_diagnostic()?;
+            let line = format!("  {}", help.style(self.style.hint));
+            crate::util::writeln_physical(&mut out, &line, tw)?;
         }
 
-        writeln!(
-            out,
+        let line = format!(
             "  {} {}",
             "Editor:".style(self.style.hint),
             editor.style(self.style.editor_command),
-        )
-        .into_diagnostic()?;
+        );
+        crate::util::writeln_physical(&mut out, &line, tw)?;
 
         if self.show_hints {
             let mut hints = vec!["Enter to open editor"];
             if self.allow_escape {
                 hints.push("Esc to cancel");
             }
-            writeln!(out, "  {}", hints.join(", ").style(self.style.hint)).into_diagnostic()?;
+            let line = format!("  {}", hints.join(", ").style(self.style.hint));
+            crate::util::writeln_physical(&mut out, &line, tw)?;
         }
 
         out.flush().into_diagnostic()?;
@@ -246,8 +247,7 @@ impl Editor {
         }
 
         let line_count = trimmed.lines().count();
-        writeln!(
-            out,
+        let line = format!(
             "{} {} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             self.prompt.style(self.style.prompt),
@@ -258,8 +258,8 @@ impl Editor {
             )
             .style(self.style.success)
             .bold(),
-        )
-        .into_diagnostic()?;
+        );
+        crate::util::writeln_physical(&mut out, &line, tw)?;
         out.flush().into_diagnostic()?;
 
         Ok(trimmed)

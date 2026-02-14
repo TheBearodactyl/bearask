@@ -314,26 +314,27 @@ impl Confirm {
     }
 
     fn render_prompt(&self, out: &mut std::io::Stdout) -> miette::Result<()> {
+        let tw = crate::util::term_width();
+
         if self.inline {
-            write!(
-                out,
+            let line = format!(
                 "{} {} ",
                 self.prompt_prefix.style(self.style.prompt_prefix),
                 self.prompt.style(self.style.prompt),
-            )
-            .into_diagnostic()?;
+            );
+            write!(out, "{}", line).into_diagnostic()?;
         } else {
-            writeln!(
-                out,
+            let line = format!(
                 "{} {}",
                 self.prompt_prefix.style(self.style.prompt_prefix),
                 self.prompt.style(self.style.prompt),
-            )
-            .into_diagnostic()?;
+            );
+            crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if let Some(suffix) = &self.prompt_suffix {
-            write!(out, "{} ", suffix.style(self.style.hint)).into_diagnostic()?;
+            let line = format!("{} ", suffix.style(self.style.hint));
+            write!(out, "{}", line).into_diagnostic()?;
         }
 
         if self.show_hints {
@@ -342,14 +343,13 @@ impl Confirm {
             } else {
                 &self.no_text
             };
-            write!(
-                out,
+            let line = format!(
                 "({}/{}, default: {}) ",
                 self.yes_text.style(self.style.yes_style),
                 self.no_text.style(self.style.no_style),
                 default_hint.style(self.style.default_value),
-            )
-            .into_diagnostic()?;
+            );
+            write!(out, "{}", line).into_diagnostic()?;
         }
 
         Ok(())
@@ -360,62 +360,45 @@ impl Confirm {
         out: &mut std::io::Stdout,
         selected: bool,
     ) -> miette::Result<()> {
+        let tw = crate::util::term_width();
+
         if self.inline {
-            write!(
-                out,
+            let line = format!(
                 "{} {} ",
                 self.prompt_prefix.style(self.style.prompt_prefix),
                 self.prompt.style(self.style.prompt),
-            )
-            .into_diagnostic()?;
+            );
+            write!(out, "{}", line).into_diagnostic()?;
         } else {
-            writeln!(
-                out,
+            let line = format!(
                 "{} {}",
                 self.prompt_prefix.style(self.style.prompt_prefix),
                 self.prompt.style(self.style.prompt),
-            )
-            .into_diagnostic()?;
+            );
+            crate::util::writeln_physical(out, &line, tw)?;
         }
 
-        write!(out, "  ").into_diagnostic()?;
-
-        if selected {
-            write!(
-                out,
-                "{}  ",
-                format!("▸ {}", self.yes_text).style(self.style.selected)
-            )
-            .into_diagnostic()?;
-            write!(
-                out,
-                "{}",
+        let options_line = if selected {
+            format!(
+                "  {}  {}",
+                format!("▸ {}", self.yes_text).style(self.style.selected),
                 format!("  {}", self.no_text).style(self.style.no_style)
             )
-            .into_diagnostic()?;
         } else {
-            write!(
-                out,
-                "{}  ",
-                format!("  {}", self.yes_text).style(self.style.yes_style)
-            )
-            .into_diagnostic()?;
-            write!(
-                out,
-                "{}",
+            format!(
+                "  {}  {}",
+                format!("  {}", self.yes_text).style(self.style.yes_style),
                 format!("▸ {}", self.no_text).style(self.style.selected)
             )
-            .into_diagnostic()?;
-        }
+        };
+        crate::util::writeln_physical(out, &options_line, tw)?;
 
         if self.show_hints {
-            write!(
-                out,
-                "\n  {}",
-                "← → to select, Enter to confirm, Esc to cancel"
-                    .style(self.style.hint)
-            )
-            .into_diagnostic()?;
+            let hint_line = format!(
+                "  {}",
+                "← → to select, Enter to confirm, Esc to cancel".style(self.style.hint)
+            );
+            crate::util::writeln_physical(out, &hint_line, tw)?;
         }
 
         Ok(())
@@ -423,8 +406,8 @@ impl Confirm {
 
     fn show_error(&self, out: &mut std::io::Stdout, error: &str) -> miette::Result<()> {
         if self.show_error_hint {
-            writeln!(
-                out,
+            let tw = crate::util::term_width();
+            let line = format!(
                 "{} {}",
                 self.style
                     .error_prefix
@@ -432,8 +415,8 @@ impl Confirm {
                     .unwrap_or("✗")
                     .style(self.style.error),
                 error.style(self.style.error_hint),
-            )
-            .into_diagnostic()?;
+            );
+            crate::util::writeln_physical(out, &line, tw)?;
         }
 
         Ok(())
@@ -451,14 +434,14 @@ impl Confirm {
             self.style.no_style
         };
 
-        writeln!(
-            out,
+        let tw = crate::util::term_width();
+        let line = format!(
             "{} {} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             self.prompt.style(self.style.prompt),
             result_text.style(result_style).bold(),
-        )
-        .into_diagnostic()?;
+        );
+        crate::util::writeln_physical(out, &line, tw)?;
 
         out.flush().into_diagnostic()?;
         Ok(())

@@ -221,7 +221,7 @@ impl Sort {
     fn handle_key(
         &self,
         key_event: KeyEvent,
-        items: &mut Vec<String>,
+        items: &mut [String],
         cursor: &mut usize,
         grabbed: &mut bool,
         scroll_offset: &mut usize,
@@ -320,20 +320,19 @@ impl Sort {
         scroll_offset: usize,
         error: Option<&str>,
     ) -> miette::Result<usize> {
+        let tw = crate::util::term_width();
         let mut line_count = 0;
 
-        writeln!(
-            out,
+        let line = format!(
             "{} {}",
             self.prompt_prefix.style(self.style.prompt_prefix),
             self.prompt.style(self.style.prompt),
-        )
-        .into_diagnostic()?;
-        line_count += 1;
+        );
+        line_count += crate::util::writeln_physical(out, &line, tw)?;
 
         if let Some(ref help) = self.help_message {
-            writeln!(out, "  {}", help.style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", help.style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         let end_offset = (scroll_offset + self.page_size).min(items.len());
@@ -351,9 +350,8 @@ impl Sort {
                 (" ", self.style.item)
             };
 
-            if self.show_indices {
-                writeln!(
-                    out,
+            let line = if self.show_indices {
+                format!(
                     "  {} {} {}",
                     marker.style(if is_cursor && grabbed {
                         self.style.grabbed
@@ -363,10 +361,8 @@ impl Sort {
                     format!("{}.", absolute_index + 1).style(self.style.index),
                     item.style(item_style)
                 )
-                .into_diagnostic()?;
             } else {
-                writeln!(
-                    out,
+                format!(
                     "  {} {}",
                     marker.style(if is_cursor && grabbed {
                         self.style.grabbed
@@ -375,40 +371,33 @@ impl Sort {
                     }),
                     item.style(item_style)
                 )
-                .into_diagnostic()?;
-            }
-            line_count += 1;
+            };
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if scroll_offset > 0 {
-            writeln!(
-                out,
+            let line = format!(
                 "  {}",
                 format!("(↑ {} more above)", scroll_offset).style(self.style.hint)
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if end_offset < items.len() {
-            writeln!(
-                out,
+            let line = format!(
                 "  {}",
                 format!("(↓ {} more below)", items.len() - end_offset).style(self.style.hint)
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if let Some(err) = error {
-            writeln!(
-                out,
+            let line = format!(
                 "  {} {}",
                 "✗".style(self.style.error),
                 err.style(self.style.error_hint)
-            )
-            .into_diagnostic()?;
-            line_count += 1;
+            );
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         if self.show_hints {
@@ -427,8 +416,8 @@ impl Sort {
                 hints.push("Esc to cancel/release");
             }
 
-            writeln!(out, "  {}", hints.join(", ").style(self.style.hint)).into_diagnostic()?;
-            line_count += 1;
+            let line = format!("  {}", hints.join(", ").style(self.style.hint));
+            line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
         Ok(line_count)

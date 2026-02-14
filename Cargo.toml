@@ -1,6 +1,6 @@
 [package]
 name = "bearask"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 description = "A really fast and featureful CLI prompting lib"
 license-file = "./LICENSE"
