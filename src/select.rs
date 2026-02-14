@@ -139,7 +139,7 @@ impl<T: Clone> Select<T> {
         self
     }
 
-    pub fn ask(&self) -> miette::Result<T> {
+    pub fn ask(&self) -> miette::Result<AskOption<T>> {
         if self.options.is_empty() {
             return Err(miette::miette!("No options provided"));
         }
@@ -158,7 +158,7 @@ impl<T: Clone> Select<T> {
         result
     }
 
-    fn ask_internal(&self) -> miette::Result<T> {
+    fn ask_internal(&self) -> miette::Result<AskOption<T>> {
         let default_index = self.default_index.unwrap_or(0).min(self.options.len() - 1);
 
         let mut selected = default_index;
@@ -191,7 +191,7 @@ impl<T: Clone> Select<T> {
 
                         let selected_option = &self.options[selected];
                         self.show_result(&mut stdout(), selected_option)?;
-                        return Ok(selected_option.value.clone());
+                        return Ok(selected_option.clone());
                     }
                     Ok(None) => {
                         if last_render_lines > 0 {
