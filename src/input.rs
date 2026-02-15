@@ -1,6 +1,7 @@
 use {
     crate::{
         style::TextInputStyle,
+        util::CursorGuard,
         validation::{Validate, run_validator},
     },
     crossterm::{
@@ -109,10 +110,12 @@ pub struct TextInput {
     style: TextInputStyle,
     validation: Option<Box<dyn Validate<str>>>,
     autocomplete: Option<Box<dyn Autocomplete>>,
+    _cursor_guard: CursorGuard,
 }
 
 impl TextInput {
     pub fn new(prompt: impl Into<String>) -> Self {
+        let _cursor_guard = CursorGuard::new().expect("Failed to initialize cursor guard");
         Self {
             prompt: prompt.into(),
             default: None,
@@ -127,6 +130,7 @@ impl TextInput {
             style: TextInputStyle::default(),
             validation: None,
             autocomplete: None,
+            _cursor_guard,
         }
     }
 

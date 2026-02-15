@@ -1,6 +1,7 @@
 use {
     crate::{
         style::NumberStyle,
+        util::CursorGuard,
         validation::{Validate, run_validator},
     },
     crossterm::{
@@ -52,6 +53,7 @@ pub struct Number<T: NumericType> {
     show_bounds: bool,
     style: NumberStyle,
     validation: Option<Box<dyn Validate<T>>>,
+    _cursor_guard: CursorGuard,
 }
 
 impl<T: NumericType> Number<T>
@@ -59,6 +61,8 @@ where
     T: From<u8>,
 {
     pub fn new(prompt: impl Into<String>) -> Self {
+        let _cursor_guard = CursorGuard::new().expect("Failed to initialize cursor guard");
+
         Self {
             prompt: prompt.into(),
             prompt_prefix: "#".into(),
@@ -72,6 +76,7 @@ where
             show_bounds: true,
             style: NumberStyle::default(),
             validation: None,
+            _cursor_guard,
         }
     }
 }

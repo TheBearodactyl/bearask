@@ -1,6 +1,7 @@
 use {
     crate::{
         style::EditorStyle,
+        util::CursorGuard,
         validation::{Validate, run_validator},
     },
     crossterm::{
@@ -29,10 +30,13 @@ pub struct Editor {
     allow_escape: bool,
     style: EditorStyle,
     validation: Option<Box<dyn Validate<str>>>,
+    _cursor_guard: CursorGuard,
 }
 
 impl Editor {
     pub fn new(prompt: impl Into<String>) -> Self {
+        let _cursor_guard = CursorGuard::new().expect("Failed to initialize cursor guard");
+
         Self {
             prompt: prompt.into(),
             prompt_prefix: "📝".into(),
@@ -45,6 +49,7 @@ impl Editor {
             allow_escape: true,
             style: EditorStyle::default(),
             validation: None,
+            _cursor_guard,
         }
     }
 

@@ -2,6 +2,7 @@ use {
     crate::{
         option::AskOption,
         style::MultiSelectStyle,
+        util::CursorGuard,
         validation::{Validate, run_validator},
     },
     crossterm::{
@@ -35,10 +36,12 @@ pub struct MultiSelect<T: Clone> {
     max_selections: Option<usize>,
     style: MultiSelectStyle,
     validation: Option<Box<dyn Validate<[usize]>>>,
+    _cursor_guard: CursorGuard,
 }
 
 impl<T: Clone> MultiSelect<T> {
     pub fn new(prompt: impl Into<String>) -> Self {
+        let _cursor_guard = CursorGuard::new().expect("Failed to initialize cursor guard");
         Self {
             prompt: prompt.into(),
             options: Vec::new(),
@@ -54,6 +57,7 @@ impl<T: Clone> MultiSelect<T> {
             max_selections: None,
             style: MultiSelectStyle::default(),
             validation: None,
+            _cursor_guard,
         }
     }
 

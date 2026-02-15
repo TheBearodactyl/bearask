@@ -1,6 +1,7 @@
 use {
     crate::{
         style::SortStyle,
+        util::CursorGuard,
         validation::{Validate, run_validator},
     },
     crossterm::{
@@ -35,10 +36,12 @@ pub struct Sort {
     vim_mode: bool,
     style: SortStyle,
     validation: Option<Box<dyn Validate<[String]>>>,
+    _cursor_guard: CursorGuard,
 }
 
 impl Sort {
     pub fn new(prompt: impl Into<String>) -> Self {
+        let _cursor_guard = CursorGuard::new().expect("Failed to initialize cursor guard");
         Self {
             prompt: prompt.into(),
             items: Vec::new(),
@@ -51,6 +54,7 @@ impl Sort {
             vim_mode: false,
             style: SortStyle::default(),
             validation: None,
+            _cursor_guard,
         }
     }
 

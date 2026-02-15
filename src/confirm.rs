@@ -1,6 +1,7 @@
 use {
     crate::{
         style::ConfirmStyle,
+        util::CursorGuard,
         validation::{Validate, run_validator},
     },
     crossterm::{
@@ -34,11 +35,14 @@ pub struct Confirm {
     show_confirmation: bool,
     allow_escape: bool,
     style: ConfirmStyle,
+    _cursor_guard: CursorGuard,
     validation: Option<Box<dyn Validate<bool>>>,
 }
 
 impl Confirm {
     pub fn new(prompt: impl Into<String>) -> Self {
+        let cursor_guard = CursorGuard::new().expect("Failed to initialize cursor guard");
+
         Self {
             prompt: prompt.into(),
             default: true,
@@ -53,6 +57,7 @@ impl Confirm {
             show_confirmation: true,
             allow_escape: true,
             style: ConfirmStyle::default(),
+            _cursor_guard: cursor_guard,
             validation: None,
         }
     }

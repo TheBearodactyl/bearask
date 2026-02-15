@@ -53,3 +53,25 @@ pub(crate) fn writeln_physical(
     writeln!(out, "{}", line).into_diagnostic()?;
     Ok(physical_rows(visible_width(line), tw))
 }
+
+#[derive(Debug, Clone)]
+pub struct CursorGuard;
+
+impl CursorGuard {
+    pub fn new() -> miette::Result<Self> {
+        crossterm::execute!(std::io::stdout(), crossterm::cursor::Hide).into_diagnostic()?;
+        Ok(Self)
+    }
+}
+
+impl Drop for CursorGuard {
+    fn drop(&mut self) {
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::cursor::Show);
+    }
+}
+
+impl Default for CursorGuard {
+    fn default() -> Self {
+        Self::new().expect("Failed to initialize cursor guard")
+    }
+}
