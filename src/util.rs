@@ -60,6 +60,11 @@ pub struct CursorGuard;
 impl CursorGuard {
     pub fn new() -> miette::Result<Self> {
         crossterm::execute!(std::io::stdout(), crossterm::cursor::Hide).into_diagnostic()?;
+        crossterm::execute!(
+            std::io::stdout(),
+            crossterm::cursor::SetCursorStyle::BlinkingBar
+        )
+        .into_diagnostic()?;
         Ok(Self)
     }
 }
@@ -67,6 +72,10 @@ impl CursorGuard {
 impl Drop for CursorGuard {
     fn drop(&mut self) {
         let _ = crossterm::execute!(std::io::stdout(), crossterm::cursor::Show);
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::cursor::SetCursorStyle::DefaultUserShape
+        );
     }
 }
 

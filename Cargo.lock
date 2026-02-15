@@ -43,7 +43,7 @@ dependencies = [
 
 [[package]]
 name = "bearask"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "crossterm",
  "dyn-clone",

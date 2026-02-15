@@ -218,6 +218,7 @@ impl TextInput {
         let mut cursor_pos = input.len();
         let mut suggestions: Vec<String> = Vec::new();
         let mut selected_suggestion: Option<usize> = None;
+        let mut suggestion_scroll_offset: usize = 0;
 
         terminal::enable_raw_mode().into_diagnostic()?;
 
@@ -229,8 +230,14 @@ impl TextInput {
             suggestions = ac.get_suggestions(&input).unwrap_or_default();
         }
 
-        let mut last_render_lines =
-            self.render(&mut stdout(), &input, &suggestions, selected_suggestion)?;
+        let (mut _last_render_lines, mut last_input_line_position) = self.render(
+            &mut stdout(),
+            &input,
+            cursor_pos,
+            &suggestions,
+            selected_suggestion,
+            suggestion_scroll_offset,
+        )?;
         stdout().flush().into_diagnostic()?;
 
         loop {
@@ -245,12 +252,14 @@ impl TextInput {
                     &mut cursor_pos,
                     &mut suggestions,
                     &mut selected_suggestion,
+                    &mut suggestion_scroll_offset,
                     &mut stdout(),
                 ) {
                     Ok(Some(answer)) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
-                        if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+
+                        if last_input_line_position > 0 {
+                            execute!(stdout(), cursor::MoveUp(last_input_line_position as u16))
                                 .into_diagnostic()?;
                         }
                         execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
@@ -259,20 +268,29 @@ impl TextInput {
                         return Ok(answer);
                     }
                     Ok(None) => {
-                        if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+                        if last_input_line_position > 0 {
+                            execute!(stdout(), cursor::MoveUp(last_input_line_position as u16))
                                 .into_diagnostic()?;
                         }
                         execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
                         execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
-                        last_render_lines =
-                            self.render(&mut stdout(), &input, &suggestions, selected_suggestion)?;
+                        let (lines, input_pos) = self.render(
+                            &mut stdout(),
+                            &input,
+                            cursor_pos,
+                            &suggestions,
+                            selected_suggestion,
+                            suggestion_scroll_offset,
+                        )?;
+                        _last_render_lines = lines;
+                        last_input_line_position = input_pos;
                         stdout().flush().into_diagnostic()?;
                     }
                     Err(e) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
-                        if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+
+                        if last_input_line_position > 0 {
+                            execute!(stdout(), cursor::MoveUp(last_input_line_position as u16))
                                 .into_diagnostic()?;
                         }
                         execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
@@ -286,6 +304,7 @@ impl TextInput {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_key(
         &mut self,
         key_event: KeyEvent,
@@ -293,6 +312,7 @@ impl TextInput {
         cursor_pos: &mut usize,
         suggestions: &mut Vec<String>,
         selected_suggestion: &mut Option<usize>,
+        suggestion_scroll_offset: &mut usize,
         _out: &mut std::io::Stdout,
     ) -> Result<Option<String>, String> {
         if key_event.modifiers.contains(KeyModifiers::CONTROL)
@@ -323,6 +343,7 @@ impl TextInput {
                 input.insert(*cursor_pos, c);
                 *cursor_pos += 1;
                 *selected_suggestion = None;
+                *suggestion_scroll_offset = 0;
 
                 if let Some(ref mut ac) = self.autocomplete {
                     *suggestions = ac.get_suggestions(input).unwrap_or_default();
@@ -334,6 +355,7 @@ impl TextInput {
                 *cursor_pos -= 1;
                 input.remove(*cursor_pos);
                 *selected_suggestion = None;
+                *suggestion_scroll_offset = 0;
 
                 if let Some(ref mut ac) = self.autocomplete {
                     *suggestions = ac.get_suggestions(input).unwrap_or_default();
@@ -363,6 +385,15 @@ impl TextInput {
                     Some(0) => suggestions.len() - 1,
                     Some(n) => n - 1,
                 });
+
+                if let Some(selected) = *selected_suggestion {
+                    if selected < *suggestion_scroll_offset {
+                        *suggestion_scroll_offset = selected;
+                    } else if selected >= *suggestion_scroll_offset + self.suggestion_page_size {
+                        *suggestion_scroll_offset =
+                            selected.saturating_sub(self.suggestion_page_size - 1);
+                    }
+                }
                 Ok(None)
             }
             KeyCode::Down if !suggestions.is_empty() => {
@@ -371,6 +402,15 @@ impl TextInput {
                     Some(n) if n >= suggestions.len() - 1 => 0,
                     Some(n) => n + 1,
                 });
+
+                if let Some(selected) = *selected_suggestion {
+                    if selected < *suggestion_scroll_offset {
+                        *suggestion_scroll_offset = selected;
+                    } else if selected >= *suggestion_scroll_offset + self.suggestion_page_size {
+                        *suggestion_scroll_offset =
+                            selected.saturating_sub(self.suggestion_page_size - 1);
+                    }
+                }
                 Ok(None)
             }
             KeyCode::Tab if self.autocomplete.is_some() => {
@@ -382,6 +422,7 @@ impl TextInput {
                         *input = replacement;
                         *cursor_pos = input.len();
                         *selected_suggestion = None;
+                        *suggestion_scroll_offset = 0;
 
                         *suggestions = ac.get_suggestions(input).unwrap_or_default();
                     }
@@ -405,11 +446,14 @@ impl TextInput {
         &self,
         out: &mut std::io::Stdout,
         input: &str,
+        cursor_pos: usize,
         suggestions: &[String],
         selected_suggestion: Option<usize>,
-    ) -> miette::Result<usize> {
+        suggestion_scroll_offset: usize,
+    ) -> miette::Result<(usize, usize)> {
         let tw = crate::util::term_width();
         let mut line_count = 0;
+        let mut prompt_prefix_for_cursor = 0;
 
         if self.inline {
             let line = format!(
@@ -417,6 +461,7 @@ impl TextInput {
                 self.prompt_prefix.style(self.style.prompt_prefix),
                 self.prompt.style(self.style.prompt),
             );
+            prompt_prefix_for_cursor = crate::util::visible_width(&line);
             write!(out, "{}", line).into_diagnostic()?;
         } else {
             let line = format!(
@@ -456,25 +501,29 @@ impl TextInput {
 
         line_count += crate::util::writeln_physical(out, &input_line, tw)?;
 
+        let input_line_position = line_count - 1;
+
         if self.show_suggestions && !suggestions.is_empty() {
-            let visible_suggestions: Vec<_> = suggestions
+            let end_offset =
+                (suggestion_scroll_offset + self.suggestion_page_size).min(suggestions.len());
+            let visible_suggestions: Vec<_> = suggestions[suggestion_scroll_offset..end_offset]
                 .iter()
                 .enumerate()
-                .take(self.suggestion_page_size)
+                .map(|(rel_idx, s)| (suggestion_scroll_offset + rel_idx, s))
                 .collect();
 
             if !visible_suggestions.is_empty() {
                 let line = format!("  {}", "Suggestions:".style(self.style.hint));
                 line_count += crate::util::writeln_physical(out, &line, tw)?;
 
-                for (idx, suggestion) in visible_suggestions {
-                    let marker = if Some(idx) == selected_suggestion {
+                for (abs_idx, suggestion) in visible_suggestions {
+                    let marker = if Some(abs_idx) == selected_suggestion {
                         "▸"
                     } else {
                         " "
                     };
 
-                    let style = if Some(idx) == selected_suggestion {
+                    let style = if Some(abs_idx) == selected_suggestion {
                         self.style.selected
                     } else {
                         self.style.suggestion
@@ -488,14 +537,39 @@ impl TextInput {
                     line_count += crate::util::writeln_physical(out, &line, tw)?;
                 }
 
-                if suggestions.len() > self.suggestion_page_size {
+                let (above_text, below_text) = (
+                    if suggestion_scroll_offset > 0 {
+                        format!("↑ {} more above", suggestion_scroll_offset)
+                    } else {
+                        String::new()
+                    },
+                    if end_offset < suggestions.len() {
+                        format!("↓ {} more below", suggestions.len() - end_offset)
+                    } else {
+                        String::new()
+                    },
+                );
+
+                let parts: Vec<&str> = [
+                    if !above_text.is_empty() {
+                        Some(above_text.as_str())
+                    } else {
+                        None
+                    },
+                    if !below_text.is_empty() {
+                        Some(below_text.as_str())
+                    } else {
+                        None
+                    },
+                ]
+                .iter()
+                .filter_map(|&x| x)
+                .collect();
+
+                if !parts.is_empty() {
                     let line = format!(
                         "    {}",
-                        format!(
-                            "({} more...)",
-                            suggestions.len() - self.suggestion_page_size
-                        )
-                        .style(self.style.hint)
+                        format!("({})", parts.join(" | ")).style(self.style.hint)
                     );
                     line_count += crate::util::writeln_physical(out, &line, tw)?;
                 }
@@ -519,7 +593,18 @@ impl TextInput {
             line_count += crate::util::writeln_physical(out, &line, tw)?;
         }
 
-        Ok(line_count)
+        let lines_to_move_up = line_count - input_line_position;
+        if lines_to_move_up > 0 {
+            execute!(out, cursor::MoveUp(lines_to_move_up as u16)).into_diagnostic()?;
+        }
+
+        let text_before_cursor = &input[..cursor_pos.min(input.len())];
+        let cursor_column =
+            prompt_prefix_for_cursor + 2 + crate::util::visible_width(text_before_cursor);
+        execute!(out, cursor::MoveToColumn(cursor_column as u16)).into_diagnostic()?;
+        execute!(out, cursor::Show).into_diagnostic()?;
+
+        Ok((line_count, input_line_position))
     }
 
     pub fn show_error(&self, out: &mut std::io::Stdout, error: &str) -> miette::Result<()> {
