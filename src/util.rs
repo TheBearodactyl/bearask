@@ -1,5 +1,22 @@
 use {crossterm::terminal, miette::IntoDiagnostic, std::io::Write};
 
+#[macro_export]
+macro_rules! validation {
+    (valid) => {
+        Ok($crate::Validation::Valid)
+    };
+
+    (invalid) => {
+        Ok($crate::Validation::Invalid::Default)
+    };
+
+    (invalid $msg:expr) => {
+        Ok($crate::Validation::Invalid($crate::ErrorMessage::Custom(
+            $msg.into(),
+        )))
+    };
+}
+
 pub(crate) fn visible_width(s: &str) -> usize {
     let mut width = 0;
     let mut chars = s.chars();
