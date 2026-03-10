@@ -13,6 +13,7 @@ use {
     dyn_clone::DynClone,
     miette::IntoDiagnostic,
     owo_colors::OwoColorize,
+    simsearch::SimSearch,
     std::io::{Write, stdout},
 };
 
@@ -92,6 +93,58 @@ impl Autocomplete for SimpleAutocomplete {
         } else {
             Ok(None)
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct FuzzyAutocomplete {
+    options: Vec<String>,
+}
+
+impl FuzzyAutocomplete {
+    pub fn new(options: Vec<String>) -> Self {
+        Self { options }
+    }
+
+    fn build_engine(&self) -> SimSearch<usize> {
+        let mut engine = SimSearch::new();
+        for (i, opt) in self.options.iter().enumerate() {
+            engine.insert(i, opt);
+        }
+        engine
+    }
+}
+
+impl Autocomplete for FuzzyAutocomplete {
+    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, String> {
+        if input.is_empty() {
+            return Ok(self.options.clone());
+        }
+
+        let engine = self.build_engine();
+        let ids = engine.search(input);
+        Ok(ids.into_iter().map(|i| self.options[i].clone()).collect())
+    }
+
+    fn get_completion(
+        &mut self,
+        input: &str,
+        highlighted_suggestion: Option<String>,
+    ) -> Result<Replacement, String> {
+        if let Some(suggestion) = highlighted_suggestion {
+            return Ok(Some(suggestion));
+        }
+
+        let suggestions = self.get_suggestions(input)?;
+        if suggestions.is_empty() {
+            return Ok(None);
+        }
+
+        if suggestions.len() == 1 {
+            return Ok(Some(suggestions[0].clone()));
+        }
+
+        Ok(None)
     }
 }
 

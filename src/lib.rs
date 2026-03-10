@@ -16,7 +16,7 @@ pub(crate) mod util;
 pub use {
     confirm::Confirm,
     editor::Editor,
-    input::{Autocomplete, Replacement, TextInput},
+    input::{Autocomplete, FuzzyAutocomplete, Replacement, SimpleAutocomplete, TextInput},
     multiselect::MultiSelect,
     number::{Number, NumericType},
     option::AskOption,

@@ -1,6 +1,6 @@
 [package]
 name = "bearask"
-version = "0.3.4"
+version = "0.4.0"
 edition = "2024"
 description = "A really fast and featureful CLI prompting lib"
 license-file = "./LICENSE"
@@ -14,4 +14,5 @@ repository = "https://github.com/TheBearodactyl/bearask"
 crossterm = "0.29.0"
 dyn-clone = "1.0.20"
 miette = { version = "7.6.0", features = ["fancy"] }
-owo-colors = "4.2.3"
+owo-colors = "4.3.0"
+simsearch = "0.3.0"

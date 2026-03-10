@@ -7,7 +7,6 @@ pub(crate) fn visible_width(s: &str) -> usize {
         if c == '\x1b' {
             match chars.next() {
                 Some('[') => {
-                    // CSI sequence: skip until final byte (0x40..=0x7E)
                     for c in chars.by_ref() {
                         if ('@'..='~').contains(&c) {
                             break;
@@ -15,7 +14,6 @@ pub(crate) fn visible_width(s: &str) -> usize {
                     }
                 }
                 Some(']') => {
-                    // OSC sequence: skip until ST (ESC \ or BEL)
                     let mut prev = '\0';
                     for c in chars.by_ref() {
                         if c == '\x07' || (prev == '\x1b' && c == '\\') {
