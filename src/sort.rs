@@ -7,7 +7,7 @@ use {
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-        execute,
+        queue,
         terminal::{self, Clear, ClearType},
     },
     miette::IntoDiagnostic,
@@ -142,6 +142,8 @@ impl Sort {
         let mut grabbed = false;
         let mut scroll_offset = 0usize;
         let mut error_message: Option<String> = None;
+        let mut buf = Vec::with_capacity(4096);
+        let mut out = stdout();
 
         terminal::enable_raw_mode().into_diagnostic()?;
 
@@ -150,14 +152,15 @@ impl Sort {
         }
 
         let mut last_render_lines = self.render(
-            &mut stdout(),
+            &mut buf,
             &items,
             cursor,
             grabbed,
             scroll_offset,
             error_message.as_deref(),
         )?;
-        stdout().flush().into_diagnostic()?;
+        out.write_all(&buf).into_diagnostic()?;
+        out.flush().into_diagnostic()?;
 
         loop {
             if let Event::Key(key_event) = event::read().into_diagnostic()? {
@@ -176,48 +179,54 @@ impl Sort {
                 ) {
                     Ok(Some(())) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
+                        buf.clear();
                         if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+                            queue!(buf, cursor::MoveUp(last_render_lines as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
-                        self.show_result(&mut stdout(), &items)?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        self.show_result(&mut buf, &items)?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
                         return Ok(items);
                     }
                     Ok(None) => {}
                     Err(e) => {
                         if e == "Cancelled" {
                             terminal::disable_raw_mode().into_diagnostic()?;
+                            buf.clear();
                             if last_render_lines > 0 {
-                                execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+                                queue!(buf, cursor::MoveUp(last_render_lines as u16))
                                     .into_diagnostic()?;
                             }
-                            execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                            execute!(stdout(), Clear(ClearType::FromCursorDown))
-                                .into_diagnostic()?;
-                            self.show_error(&mut stdout(), &e)?;
+                            queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                            queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                            self.show_error(&mut buf, &e)?;
+                            out.write_all(&buf).into_diagnostic()?;
+                            out.flush().into_diagnostic()?;
                             return Err(miette::miette!(e));
                         }
                         error_message = Some(e);
                     }
                 }
 
+                buf.clear();
                 if last_render_lines > 0 {
-                    execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
-                        .into_diagnostic()?;
+                    queue!(buf, cursor::MoveUp(last_render_lines as u16)).into_diagnostic()?;
                 }
-                execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
                 last_render_lines = self.render(
-                    &mut stdout(),
+                    &mut buf,
                     &items,
                     cursor,
                     grabbed,
                     scroll_offset,
                     error_message.as_deref(),
                 )?;
-                stdout().flush().into_diagnostic()?;
+                out.write_all(&buf).into_diagnostic()?;
+                out.flush().into_diagnostic()?;
             }
         }
     }
@@ -317,7 +326,7 @@ impl Sort {
 
     fn render(
         &self,
-        out: &mut std::io::Stdout,
+        out: &mut impl Write,
         items: &[String],
         cursor: usize,
         grabbed: bool,
@@ -427,7 +436,7 @@ impl Sort {
         Ok(line_count)
     }
 
-    fn show_error(&self, out: &mut std::io::Stdout, error: &str) -> miette::Result<()> {
+    fn show_error(&self, out: &mut impl Write, error: &str) -> miette::Result<()> {
         writeln!(
             out,
             "{} {}",
@@ -439,7 +448,7 @@ impl Sort {
         Ok(())
     }
 
-    fn show_result(&self, out: &mut std::io::Stdout, items: &[String]) -> miette::Result<()> {
+    fn show_result(&self, out: &mut impl Write, items: &[String]) -> miette::Result<()> {
         let result_text = items
             .iter()
             .enumerate()
@@ -456,7 +465,6 @@ impl Sort {
         )
         .into_diagnostic()?;
 
-        out.flush().into_diagnostic()?;
         Ok(())
     }
 }

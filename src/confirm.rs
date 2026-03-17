@@ -5,8 +5,9 @@ use {
         validation::{Validate, run_validator},
     },
     crossterm::{
-        ExecutableCommand, cursor,
+        cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+        queue,
         terminal::{self, Clear, ClearType},
     },
     miette::IntoDiagnostic,
@@ -152,6 +153,7 @@ impl Confirm {
     fn ask_interactive(&self) -> miette::Result<bool> {
         let mut out = stdout();
         let mut selected = self.default;
+        let mut buf = Vec::with_capacity(4096);
 
         terminal::enable_raw_mode().into_diagnostic()?;
 
@@ -159,10 +161,9 @@ impl Confirm {
             event::read().into_diagnostic()?;
         }
 
-        out.execute(cursor::SavePosition).into_diagnostic()?;
-        out.flush().into_diagnostic()?;
-
-        self.render_interactive_prompt(&mut out, selected)?;
+        queue!(buf, cursor::SavePosition).into_diagnostic()?;
+        self.render_interactive_prompt(&mut buf, selected)?;
+        out.write_all(&buf).into_diagnostic()?;
         out.flush().into_diagnostic()?;
 
         loop {
@@ -175,26 +176,30 @@ impl Confirm {
                     Ok(Some(answer)) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
                         if self.show_confirmation {
-                            out.execute(cursor::RestorePosition).into_diagnostic()?;
-                            out.execute(Clear(ClearType::FromCursorDown))
-                                .into_diagnostic()?;
-                            self.show_result(&mut out, answer)?;
+                            buf.clear();
+                            queue!(buf, cursor::RestorePosition).into_diagnostic()?;
+                            queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                            self.show_result(&mut buf, answer)?;
+                            out.write_all(&buf).into_diagnostic()?;
+                            out.flush().into_diagnostic()?;
                         }
                         return Ok(answer);
                     }
                     Ok(None) => {
-                        out.execute(cursor::RestorePosition).into_diagnostic()?;
-                        out.execute(Clear(ClearType::FromCursorDown))
-                            .into_diagnostic()?;
-                        self.render_interactive_prompt(&mut out, selected)?;
+                        buf.clear();
+                        queue!(buf, cursor::RestorePosition).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        self.render_interactive_prompt(&mut buf, selected)?;
+                        out.write_all(&buf).into_diagnostic()?;
                         out.flush().into_diagnostic()?;
                     }
                     Err(e) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
-                        out.execute(cursor::RestorePosition).into_diagnostic()?;
-                        out.execute(Clear(ClearType::FromCursorDown))
-                            .into_diagnostic()?;
-                        self.show_error(&mut out, &e)?;
+                        buf.clear();
+                        queue!(buf, cursor::RestorePosition).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        self.show_error(&mut buf, &e)?;
+                        out.write_all(&buf).into_diagnostic()?;
                         out.flush().into_diagnostic()?;
                         return Err(miette::miette!(e));
                     }
@@ -205,16 +210,17 @@ impl Confirm {
 
     fn ask_text_input(&self) -> miette::Result<bool> {
         let mut out = stdout();
+        let mut buf = Vec::with_capacity(4096);
+
         terminal::enable_raw_mode().into_diagnostic()?;
 
         while event::poll(std::time::Duration::from_millis(0)).into_diagnostic()? {
             event::read().into_diagnostic()?;
         }
 
-        out.execute(cursor::SavePosition).into_diagnostic()?;
-        out.flush().into_diagnostic()?;
-
-        self.render_prompt(&mut out)?;
+        queue!(buf, cursor::SavePosition).into_diagnostic()?;
+        self.render_prompt(&mut buf)?;
+        out.write_all(&buf).into_diagnostic()?;
         out.flush().into_diagnostic()?;
 
         loop {
@@ -229,10 +235,12 @@ impl Confirm {
                     Ok(Some(answer)) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
                         if self.show_confirmation {
-                            out.execute(cursor::RestorePosition).into_diagnostic()?;
-                            out.execute(Clear(ClearType::FromCursorDown))
-                                .into_diagnostic()?;
-                            self.show_result(&mut out, answer)?;
+                            buf.clear();
+                            queue!(buf, cursor::RestorePosition).into_diagnostic()?;
+                            queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                            self.show_result(&mut buf, answer)?;
+                            out.write_all(&buf).into_diagnostic()?;
+                            out.flush().into_diagnostic()?;
                         }
                         return Ok(answer);
                     }
@@ -240,12 +248,12 @@ impl Confirm {
                         continue;
                     }
                     Err(e) => {
-                        out.execute(cursor::RestorePosition).into_diagnostic()?;
-                        out.execute(Clear(ClearType::FromCursorDown))
-                            .into_diagnostic()?;
-                        self.show_error(&mut out, &e)?;
-                        out.flush().into_diagnostic()?;
-                        self.render_prompt(&mut out)?;
+                        buf.clear();
+                        queue!(buf, cursor::RestorePosition).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        self.show_error(&mut buf, &e)?;
+                        self.render_prompt(&mut buf)?;
+                        out.write_all(&buf).into_diagnostic()?;
                         out.flush().into_diagnostic()?;
                     }
                 }
@@ -318,7 +326,7 @@ impl Confirm {
         Ok(Some(value))
     }
 
-    fn render_prompt(&self, out: &mut std::io::Stdout) -> miette::Result<()> {
+    fn render_prompt(&self, out: &mut impl Write) -> miette::Result<()> {
         let tw = crate::util::term_width();
 
         if self.inline {
@@ -362,7 +370,7 @@ impl Confirm {
 
     fn render_interactive_prompt(
         &self,
-        out: &mut std::io::Stdout,
+        out: &mut impl Write,
         selected: bool,
     ) -> miette::Result<()> {
         let tw = crate::util::term_width();
@@ -409,7 +417,7 @@ impl Confirm {
         Ok(())
     }
 
-    fn show_error(&self, out: &mut std::io::Stdout, error: &str) -> miette::Result<()> {
+    fn show_error(&self, out: &mut impl Write, error: &str) -> miette::Result<()> {
         if self.show_error_hint {
             let tw = crate::util::term_width();
             let line = format!(
@@ -427,7 +435,7 @@ impl Confirm {
         Ok(())
     }
 
-    fn show_result(&self, out: &mut std::io::Stdout, answer: bool) -> miette::Result<()> {
+    fn show_result(&self, out: &mut impl Write, answer: bool) -> miette::Result<()> {
         let result_text = if answer {
             &self.yes_text
         } else {
@@ -448,7 +456,6 @@ impl Confirm {
         );
         crate::util::writeln_physical(out, &line, tw)?;
 
-        out.flush().into_diagnostic()?;
         Ok(())
     }
 }

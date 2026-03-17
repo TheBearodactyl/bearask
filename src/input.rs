@@ -7,7 +7,7 @@ use {
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-        execute,
+        queue,
         terminal::{self, Clear, ClearType},
     },
     dyn_clone::DynClone,
@@ -272,6 +272,8 @@ impl TextInput {
         let mut suggestions: Vec<String> = Vec::new();
         let mut selected_suggestion: Option<usize> = None;
         let mut suggestion_scroll_offset: usize = 0;
+        let mut buf = Vec::with_capacity(4096);
+        let mut out = stdout();
 
         terminal::enable_raw_mode().into_diagnostic()?;
 
@@ -284,14 +286,15 @@ impl TextInput {
         }
 
         let (mut _last_render_lines, mut last_input_line_position) = self.render(
-            &mut stdout(),
+            &mut buf,
             &input,
             cursor_pos,
             &suggestions,
             selected_suggestion,
             suggestion_scroll_offset,
         )?;
-        stdout().flush().into_diagnostic()?;
+        out.write_all(&buf).into_diagnostic()?;
+        out.flush().into_diagnostic()?;
 
         loop {
             if let Event::Key(key_event) = event::read().into_diagnostic()? {
@@ -311,24 +314,28 @@ impl TextInput {
                     Ok(Some(answer)) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
 
+                        buf.clear();
                         if last_input_line_position > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_input_line_position as u16))
+                            queue!(buf, cursor::MoveUp(last_input_line_position as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
-                        self.show_result(&mut stdout(), &answer)?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        self.show_result(&mut buf, &answer)?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
                         return Ok(answer);
                     }
                     Ok(None) => {
+                        buf.clear();
                         if last_input_line_position > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_input_line_position as u16))
+                            queue!(buf, cursor::MoveUp(last_input_line_position as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
                         let (lines, input_pos) = self.render(
-                            &mut stdout(),
+                            &mut buf,
                             &input,
                             cursor_pos,
                             &suggestions,
@@ -337,19 +344,22 @@ impl TextInput {
                         )?;
                         _last_render_lines = lines;
                         last_input_line_position = input_pos;
-                        stdout().flush().into_diagnostic()?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
                     }
                     Err(e) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
 
+                        buf.clear();
                         if last_input_line_position > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_input_line_position as u16))
+                            queue!(buf, cursor::MoveUp(last_input_line_position as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
-                        self.show_error(&mut stdout(), &e)?;
-                        stdout().flush().into_diagnostic()?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        self.show_error(&mut buf, &e)?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
                         return Err(miette::miette!(e));
                     }
                 }
@@ -497,7 +507,7 @@ impl TextInput {
 
     pub fn render(
         &self,
-        out: &mut std::io::Stdout,
+        out: &mut impl Write,
         input: &str,
         cursor_pos: usize,
         suggestions: &[String],
@@ -648,19 +658,19 @@ impl TextInput {
 
         let lines_to_move_up = line_count - input_line_position;
         if lines_to_move_up > 0 {
-            execute!(out, cursor::MoveUp(lines_to_move_up as u16)).into_diagnostic()?;
+            queue!(out, cursor::MoveUp(lines_to_move_up as u16)).into_diagnostic()?;
         }
 
         let text_before_cursor = &input[..cursor_pos.min(input.len())];
         let cursor_column =
             prompt_prefix_for_cursor + 2 + crate::util::visible_width(text_before_cursor);
-        execute!(out, cursor::MoveToColumn(cursor_column as u16)).into_diagnostic()?;
-        execute!(out, cursor::Show).into_diagnostic()?;
+        queue!(out, cursor::MoveToColumn(cursor_column as u16)).into_diagnostic()?;
+        queue!(out, cursor::Show).into_diagnostic()?;
 
         Ok((line_count, input_line_position))
     }
 
-    pub fn show_error(&self, out: &mut std::io::Stdout, error: &str) -> miette::Result<()> {
+    pub fn show_error(&self, out: &mut impl Write, error: &str) -> miette::Result<()> {
         let tw = crate::util::term_width();
         let line = format!(
             "{} {}",
@@ -672,7 +682,7 @@ impl TextInput {
         Ok(())
     }
 
-    pub fn show_result(&self, out: &mut std::io::Stdout, answer: &str) -> miette::Result<()> {
+    pub fn show_result(&self, out: &mut impl Write, answer: &str) -> miette::Result<()> {
         let tw = crate::util::term_width();
         let line = format!(
             "{} {} {}",
@@ -682,7 +692,6 @@ impl TextInput {
         );
         crate::util::writeln_physical(out, &line, tw)?;
 
-        out.flush().into_diagnostic()?;
         Ok(())
     }
 }

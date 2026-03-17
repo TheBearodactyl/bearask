@@ -7,7 +7,7 @@ use {
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-        execute,
+        queue,
         terminal::{self, Clear, ClearType},
     },
     miette::IntoDiagnostic,
@@ -165,6 +165,8 @@ impl Password {
         let mut cursor_pos: usize = 0;
         let mut revealed = self.display_mode == PasswordDisplayMode::Full;
         let mut error_message: Option<String> = None;
+        let mut buf = Vec::with_capacity(4096);
+        let mut out = stdout();
 
         terminal::enable_raw_mode().into_diagnostic()?;
 
@@ -173,13 +175,14 @@ impl Password {
         }
 
         let mut last_render_lines = self.render(
-            &mut stdout(),
+            &mut buf,
             prompt,
             &input,
             revealed,
             error_message.as_deref(),
         )?;
-        stdout().flush().into_diagnostic()?;
+        out.write_all(&buf).into_diagnostic()?;
+        out.flush().into_diagnostic()?;
 
         loop {
             if let Event::Key(key_event) = event::read().into_diagnostic()? {
@@ -192,24 +195,30 @@ impl Password {
                 match self.handle_key(key_event, &mut input, &mut cursor_pos, &mut revealed) {
                     Ok(Some(answer)) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
+                        buf.clear();
                         if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+                            queue!(buf, cursor::MoveUp(last_render_lines as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
-                        self.show_result(&mut stdout(), prompt)?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        self.show_result(&mut buf, prompt)?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
                         return Ok(answer);
                     }
                     Ok(None) => {}
                     Err(e) if e == "Cancelled" => {
                         terminal::disable_raw_mode().into_diagnostic()?;
+                        buf.clear();
                         if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+                            queue!(buf, cursor::MoveUp(last_render_lines as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
                         return Err(miette::miette!("Cancelled"));
                     }
                     Err(e) => {
@@ -217,20 +226,21 @@ impl Password {
                     }
                 }
 
+                buf.clear();
                 if last_render_lines > 0 {
-                    execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
-                        .into_diagnostic()?;
+                    queue!(buf, cursor::MoveUp(last_render_lines as u16)).into_diagnostic()?;
                 }
-                execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
                 last_render_lines = self.render(
-                    &mut stdout(),
+                    &mut buf,
                     prompt,
                     &input,
                     revealed,
                     error_message.as_deref(),
                 )?;
-                stdout().flush().into_diagnostic()?;
+                out.write_all(&buf).into_diagnostic()?;
+                out.flush().into_diagnostic()?;
             }
         }
     }
@@ -344,7 +354,7 @@ impl Password {
 
     fn render(
         &self,
-        out: &mut std::io::Stdout,
+        out: &mut impl Write,
         prompt: &str,
         input: &str,
         revealed: bool,
@@ -434,7 +444,7 @@ impl Password {
         Ok(line_count)
     }
 
-    fn show_result(&self, out: &mut std::io::Stdout, prompt: &str) -> miette::Result<()> {
+    fn show_result(&self, out: &mut impl Write, prompt: &str) -> miette::Result<()> {
         let tw = crate::util::term_width();
         let line = format!(
             "{} {} {}",
@@ -444,7 +454,6 @@ impl Password {
         );
         crate::util::writeln_physical(out, &line, tw)?;
 
-        out.flush().into_diagnostic()?;
         Ok(())
     }
 }

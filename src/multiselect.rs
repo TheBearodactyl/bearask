@@ -8,7 +8,7 @@ use {
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-        execute,
+        queue,
         terminal::{self, Clear, ClearType},
     },
     miette::IntoDiagnostic,
@@ -173,16 +173,19 @@ impl<T: Clone> MultiSelect<T> {
 
         let mut cursor = 0;
         let mut scroll_offset = 0;
+        let mut buf = Vec::with_capacity(4096);
+        let mut out = stdout();
+
         let mut last_render_lines =
-            self.render(&mut stdout(), cursor, scroll_offset, &selected_indices)?;
+            self.render(&mut buf, cursor, scroll_offset, &selected_indices)?;
+        out.write_all(&buf).into_diagnostic()?;
+        out.flush().into_diagnostic()?;
 
         terminal::enable_raw_mode().into_diagnostic()?;
 
         while event::poll(std::time::Duration::from_millis(0)).into_diagnostic()? {
             event::read().into_diagnostic()?;
         }
-
-        stdout().flush().into_diagnostic()?;
 
         loop {
             if let Event::Key(key_event) = event::read().into_diagnostic()? {
@@ -198,16 +201,19 @@ impl<T: Clone> MultiSelect<T> {
                 ) {
                     Ok(Some(())) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
+                        buf.clear();
                         if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+                            queue!(buf, cursor::MoveUp(last_render_lines as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
 
                         let mut indices: Vec<usize> = selected_indices.into_iter().collect();
                         indices.sort_unstable();
-                        self.show_result(&mut stdout(), &indices)?;
+                        self.show_result(&mut buf, &indices)?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
 
                         let selected_options = indices
                             .iter()
@@ -216,26 +222,30 @@ impl<T: Clone> MultiSelect<T> {
                         return Ok(selected_options);
                     }
                     Ok(None) => {
+                        buf.clear();
                         if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+                            queue!(buf, cursor::MoveUp(last_render_lines as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
                         last_render_lines =
-                            self.render(&mut stdout(), cursor, scroll_offset, &selected_indices)?;
-                        stdout().flush().into_diagnostic()?;
+                            self.render(&mut buf, cursor, scroll_offset, &selected_indices)?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
                     }
                     Err(e) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
+                        buf.clear();
                         if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+                            queue!(buf, cursor::MoveUp(last_render_lines as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
-                        self.show_error(&mut stdout(), &e)?;
-                        stdout().flush().into_diagnostic()?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        self.show_error(&mut buf, &e)?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
                         return Err(miette::miette!(e));
                     }
                 }
@@ -392,7 +402,7 @@ impl<T: Clone> MultiSelect<T> {
 
     fn render(
         &self,
-        out: &mut std::io::Stdout,
+        out: &mut impl Write,
         cursor: usize,
         scroll_offset: usize,
         selected_indices: &HashSet<usize>,
@@ -526,7 +536,7 @@ impl<T: Clone> MultiSelect<T> {
         Ok(line_count)
     }
 
-    fn show_error(&self, out: &mut std::io::Stdout, error: &str) -> miette::Result<()> {
+    fn show_error(&self, out: &mut impl Write, error: &str) -> miette::Result<()> {
         let line = format!(
             "{} {}",
             "✗".style(self.style.error),
@@ -538,7 +548,7 @@ impl<T: Clone> MultiSelect<T> {
         Ok(())
     }
 
-    fn show_result(&self, out: &mut std::io::Stdout, selected: &[usize]) -> miette::Result<()> {
+    fn show_result(&self, out: &mut impl Write, selected: &[usize]) -> miette::Result<()> {
         let selected_names: Vec<String> = selected
             .iter()
             .filter_map(|&i| self.options.get(i).map(|opt| opt.name.clone()))
@@ -559,7 +569,6 @@ impl<T: Clone> MultiSelect<T> {
         let tw = crate::util::term_width();
         crate::util::writeln_physical(out, &line, tw)?;
 
-        out.flush().into_diagnostic()?;
         Ok(())
     }
 }

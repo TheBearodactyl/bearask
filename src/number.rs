@@ -7,7 +7,7 @@ use {
     crossterm::{
         cursor,
         event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-        execute,
+        queue,
         terminal::{self, Clear, ClearType},
     },
     miette::IntoDiagnostic,
@@ -160,6 +160,8 @@ impl<T: NumericType> Number<T> {
         let mut input = self.default.map(|d| d.to_string()).unwrap_or_default();
         let mut cursor_pos = input.len();
         let mut error_message: Option<String> = None;
+        let mut buf = Vec::with_capacity(4096);
+        let mut out = stdout();
 
         terminal::enable_raw_mode().into_diagnostic()?;
 
@@ -167,8 +169,9 @@ impl<T: NumericType> Number<T> {
             event::read().into_diagnostic()?;
         }
 
-        let mut last_render_lines = self.render(&mut stdout(), &input, error_message.as_deref())?;
-        stdout().flush().into_diagnostic()?;
+        let mut last_render_lines = self.render(&mut buf, &input, error_message.as_deref())?;
+        out.write_all(&buf).into_diagnostic()?;
+        out.flush().into_diagnostic()?;
 
         loop {
             if let Event::Key(key_event) = event::read().into_diagnostic()? {
@@ -181,24 +184,30 @@ impl<T: NumericType> Number<T> {
                 match self.handle_key(key_event, &mut input, &mut cursor_pos) {
                     Ok(Some(value)) => {
                         terminal::disable_raw_mode().into_diagnostic()?;
+                        buf.clear();
                         if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+                            queue!(buf, cursor::MoveUp(last_render_lines as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
-                        self.show_result(&mut stdout(), value)?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        self.show_result(&mut buf, value)?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
                         return Ok(value);
                     }
                     Ok(None) => {}
                     Err(e) if e == "Cancelled" => {
                         terminal::disable_raw_mode().into_diagnostic()?;
+                        buf.clear();
                         if last_render_lines > 0 {
-                            execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
+                            queue!(buf, cursor::MoveUp(last_render_lines as u16))
                                 .into_diagnostic()?;
                         }
-                        execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                        execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                        queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                        out.write_all(&buf).into_diagnostic()?;
+                        out.flush().into_diagnostic()?;
                         return Err(miette::miette!("Cancelled"));
                     }
                     Err(e) => {
@@ -206,14 +215,15 @@ impl<T: NumericType> Number<T> {
                     }
                 }
 
+                buf.clear();
                 if last_render_lines > 0 {
-                    execute!(stdout(), cursor::MoveUp(last_render_lines as u16))
-                        .into_diagnostic()?;
+                    queue!(buf, cursor::MoveUp(last_render_lines as u16)).into_diagnostic()?;
                 }
-                execute!(stdout(), cursor::MoveToColumn(0)).into_diagnostic()?;
-                execute!(stdout(), Clear(ClearType::FromCursorDown)).into_diagnostic()?;
-                last_render_lines = self.render(&mut stdout(), &input, error_message.as_deref())?;
-                stdout().flush().into_diagnostic()?;
+                queue!(buf, cursor::MoveToColumn(0)).into_diagnostic()?;
+                queue!(buf, Clear(ClearType::FromCursorDown)).into_diagnostic()?;
+                last_render_lines = self.render(&mut buf, &input, error_message.as_deref())?;
+                out.write_all(&buf).into_diagnostic()?;
+                out.flush().into_diagnostic()?;
             }
         }
     }
@@ -331,7 +341,7 @@ impl<T: NumericType> Number<T> {
 
     fn render(
         &self,
-        out: &mut std::io::Stdout,
+        out: &mut impl Write,
         input: &str,
         error: Option<&str>,
     ) -> miette::Result<usize> {
@@ -405,7 +415,7 @@ impl<T: NumericType> Number<T> {
         Ok(line_count)
     }
 
-    fn show_result(&self, out: &mut std::io::Stdout, value: T) -> miette::Result<()> {
+    fn show_result(&self, out: &mut impl Write, value: T) -> miette::Result<()> {
         let tw = crate::util::term_width();
         let line = format!(
             "{} {} {}",
@@ -415,7 +425,6 @@ impl<T: NumericType> Number<T> {
         );
         crate::util::writeln_physical(out, &line, tw)?;
 
-        out.flush().into_diagnostic()?;
         Ok(())
     }
 }

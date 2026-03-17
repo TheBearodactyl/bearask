@@ -61,7 +61,7 @@ pub(crate) fn term_width() -> u16 {
 }
 
 pub(crate) fn writeln_physical(
-    out: &mut std::io::Stdout,
+    out: &mut impl Write,
     line: &str,
     tw: u16,
 ) -> miette::Result<usize> {
